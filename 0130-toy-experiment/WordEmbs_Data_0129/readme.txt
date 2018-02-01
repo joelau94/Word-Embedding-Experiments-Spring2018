@@ -7,8 +7,8 @@ import cPickle as pkl
 import numpy as np
 
 data = pkl.load(open('WordEmbs.pkl','rb')) # load pickle object
-word_list = data['words'] # a python list containing words in the same order as in embeddings (4807 words)
-word_embedding = data['embeddings'] # a numpy array, which is the word embedding matrix (dimension: 4807 * 64)
+word_list = data['words'] # a python list containing words in the same order as in embeddings (4319 words)
+word_embedding = data['embeddings'] # a numpy array, which is the word embedding matrix (dimension: 4319 * 64)
 
 # end of python code
 
