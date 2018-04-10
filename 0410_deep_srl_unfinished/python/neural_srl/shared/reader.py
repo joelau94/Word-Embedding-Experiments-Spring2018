@@ -254,3 +254,33 @@ def get_srl_test_data(filepath, config, word_dict, label_dict, allow_new_words=T
   
   return (sentences,  [word_embedding, None, None], [word_embedding_shape,] + feature_shapes)
     
+def get_srl_test_data_gemb(filepath, config, word_dict, label_dict, allow_new_words=False):
+  allow_new_words = False # should not make use of pretrained embeddings at test time
+  word_dict.accept_new = allow_new_words
+  if label_dict.accept_new:
+    label_dict.set_unknown_token(UNKNOWN_LABEL)
+    label_dict.accept_new = False
+  
+  if filepath != None and filepath != '': 
+    samples = get_srl_sentences(filepath, config.use_se_marker)
+  else:
+    samples = []
+  word_to_embeddings = get_pretrained_embeddings(WORD_EMBEDDINGS[config.word_embedding])
+  if allow_new_words:
+    tokens = [string_sequence_to_ids(sent[0], word_dict, True, word_to_embeddings) for sent in samples]
+  else:
+    # list of sent [list of ids[]]
+    tokens = [string_sequence_to_ids(sent[0], word_dict, True) for sent in samples]
+    
+  labels = [string_sequence_to_ids(sent[2], label_dict) for sent in samples]
+  srl_features, feature_shapes = features.get_srl_features(samples, config)
+  
+  sentences = []
+  for i in range(len(tokens)):
+    sentences.append((tokens[i],) + tuple(srl_features[i]) + (labels[i],))
+    
+  word_embedding = [word_to_embeddings[w] for w in word_dict.idx2str]
+  word_embedding_shape = [len(word_embedding), len(word_embedding[0])]
+
+  # sentences: tuple(list[word_ids], list[feat_ids], list[emb_shapes], list[feat_shapes])
+  return (sentences,  [word_embedding, None, None], [word_embedding_shape,] + feature_shapes)

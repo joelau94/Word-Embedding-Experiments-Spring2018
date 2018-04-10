@@ -145,10 +145,12 @@ class TaggerData(object):
     return [zip(*t) for t in batched_tensors]
   
   def get_gemb_test_data(self, test_sentences, batch_size = None):
+    batch_size = 1 # batch size must be 1, because number of oov is not equal for each sent
+    unk_id = self.word_dict.unknown_id
     max_len = max([len(s[0]) for s in test_sentences])
     num_samples = len(test_sentences)
     #print("Max sentence length: {} among {} samples.".format(max_len, num_samples))
-    test_tensors =  [tensorize(s, max_len) for s in test_sentences]
+    test_tensors =  [tensorize_with_oov(s, unk_id, max_len) for s in test_sentences]
     if batch_size is None:
       return [np.array(v) for v in zip(*test_tensors)]
     batched_tensors = [test_tensors[i: min(i+ batch_size, num_samples)]

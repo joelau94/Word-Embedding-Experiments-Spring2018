@@ -130,7 +130,7 @@ def get_eval_with_gemb_function(self):
 
     loss = CrossEntropyLoss().connect(self.scores, self.mask, self.y)
     return theano.function([inputs_0, self.mask0, self.y0], [self.pred0, loss],
-                 name='f_eval',
+                 name='f_gemb_eval',
                  allow_input_downcast=True,
                  on_unused_input='warn',
                  givens=({self.is_train:  numpy.cast['int8'](0)}))
