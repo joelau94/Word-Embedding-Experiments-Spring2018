@@ -84,11 +84,12 @@ def train_gemb(args):
     # Save word and label dict to model directory.
     data.word_dict.save(os.path.join(args.model, 'word_dict'))
     data.label_dict.save(os.path.join(args.model, 'label_dict'))
-    writer = open(os.path.join(args.model, 'checkpoints.tsv'), 'w')
+    writer = open(os.path.join(args.model, 'gemb_checkpoints.tsv'), 'w')
     writer.write('step\tdatetime\tdev_loss\tdev_accuracy\tbest_dev_accuracy\n')
 
   with Timer('Building model'):
     model = BiLSTMTaggerModel(data, config=config)
+    model.load(os.path.join(args.model, 'model'))
     model.add_gemb() 
     for param in model.gemb.params:
       print param, param.name, param.shape.eval()
@@ -139,7 +140,7 @@ if __name__ == "__main__":
                       type=str,
                       default='',
                       required=True,
-                      help='Path to the directory for saving model and checkpoints.')
+                      help='Path to the directory for saving GEMB model and checkpoints.')
 
   parser.add_argument('--train',
                       type=str,

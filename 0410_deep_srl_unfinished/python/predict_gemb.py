@@ -94,6 +94,11 @@ if __name__ == "__main__":
                       required=True, 
                       help='Path to the model directory.')
 
+  parser.add_argument('--gemb-model',
+                      type=str,
+                      default='',
+                      required=True, 
+                      help='Path to the GEMB model directory.')
  
   parser.add_argument('--input',
                       type=str,
@@ -149,6 +154,8 @@ if __name__ == "__main__":
   else:
     print ('Using an ensemble of {} models'.format(num_ensemble_models))
 
+  gemb_model_path = os.path.join(args.gemb_model, 'gemb_model.npz')
+
   ensemble_scores = None
   for i in range(num_ensemble_models):
     if num_ensemble_models == 1:
@@ -163,6 +170,7 @@ if __name__ == "__main__":
     scores, data, test_sentences, test_data = get_scores(config,
                                                          args.task,
                                                          model_path,
+                                                         gemb_model_path,
                                                          word_dict_path,
                                                          label_dict_path,
                                                          args.input)
