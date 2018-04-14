@@ -108,19 +108,25 @@ class Parser(BaseParser):
     ctx = tf.concat([tf.split(recur_states_1[oov_pos-1], 2, axis=-1)[0],
                     tf.split(recur_states_1[oov_pos+1], 2, axis=-1)],
                     axis=-1)
-    feat = tf.contrib.layers.fully_connected(inputs=ctx,
-        num_outputs=len(self.vocabs[0]._str2idx),
-        activation_fn=None,
-        scope='gemb')
-    scores = tf.nn.softmax(feat)
-    self.gemb_loss = tf.nn.softmax_cross_entropy_with_logits(scores, self.inputs[oov_pos,:,0])
+    with tf.variable_scope('gemb'):
+      feat = tf.contrib.layers.fully_connected(inputs=ctx,
+            num_outputs=len(self.vocabs[0]._str2idx),
+            activation_fn=None,
+            scope='gemb_fc')
+
+    # for testing
+    self.gemb_scores = tf.nn.softmax(feat)
+    self.gembedding = tf.reduce_sum(tf.expand_dims(self.gemb_scores, axis=-1) * embed_mat, axis=-2)
+
+    # for training
+    self.gemb_loss = tf.nn.softmax_cross_entropy_with_logits(feat, self.inputs[oov_pos,:,0])
 
   def insert_gemb_graph(self):
     '''
     Insert input node of gemb
     '''
-    self.gembedding = tf.placeholder(dtype=tf.float32, shape=(None,None,None), name='gembedding')
-    self.word_inputs = self.gembedding
+    self.gembedding_new = tf.placeholder(dtype=tf.float32, shape=(None,None,None), name='gembedding_new')
+    self.word_inputs = self.gembedding_new
   
   #=============================================================
   def prob_argmax(self, parse_probs, rel_probs, tokens_to_keep):

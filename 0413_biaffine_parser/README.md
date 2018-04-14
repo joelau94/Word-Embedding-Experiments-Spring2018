@@ -1,10 +1,8 @@
 # Modifications for GEmb
 
-### Done:
 + Computation graph modifications: ```lib/models/parsers/parser.py```
-
-### In Progress:
-+ Training / testing procedure
++ Training and Testing procedure: ```network.py```
++ Data loading and formatting: ```dataset.py```
 
 
 ----------------------------------

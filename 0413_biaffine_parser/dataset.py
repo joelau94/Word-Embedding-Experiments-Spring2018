@@ -167,7 +167,77 @@ class Dataset(Configurable):
         self.targets: data[:,:maxlen,target_idxs]
       })
       yield feed_dict, sents
-  
+
+  def get_minibatches_gemb_train(self, batch_size, input_idxs, target_idxs, shuffle=True):
+    """"""
+    
+    minibatches = []
+    for bkt_idx, bucket in enumerate(self._metabucket):
+      if batch_size == 0:
+        n_splits = 1
+      else:
+        n_tokens = len(bucket) * bucket.size
+        n_splits = max(n_tokens // batch_size, 1)
+      if shuffle:
+        range_func = np.random.permutation
+      else:
+        range_func = np.arange
+      arr_sp = np.array_split(range_func(len(bucket)), n_splits)
+      for bkt_mb in arr_sp:
+        minibatches.append( (bkt_idx, bkt_mb) )
+    if shuffle:
+      np.random.shuffle(minibatches)
+    for bkt_idx, bkt_mb in minibatches:
+      feed_dict = {}
+      data = self[bkt_idx].data[bkt_mb]
+      sents = self[bkt_idx].sents[bkt_mb]
+      maxlen = np.max(np.sum(np.greater(data[:,:,0], 0), axis=1))
+
+      no_oov = [i for i,s in enumerate(sents) if unk_id not in s] # get unk_id somehow?
+      data_no_oov = data[no_oov]
+      oov_pos = np.random.randint(1, maxlen-1, size=[len(no_oov),1]) # one oov each sent
+
+      feed_dict.update({
+        self.inputs: data_no_oov[:,:maxlen,input_idxs],
+        self.targets: data_no_oov[:,:maxlen,target_idxs]
+      })
+      yield feed_dict, oov_pos, sents # sents makes no sense, not equal to data length, don't use it
+
+
+  def get_minibatches_gemb_test(self, batch_size, input_idxs, target_idxs, shuffle=True):
+    """"""
+    batch_size = 1 # must be 1 during testing
+    minibatches = []
+    for bkt_idx, bucket in enumerate(self._metabucket):
+      if batch_size == 0:
+        n_splits = 1
+      else:
+        n_tokens = len(bucket) * bucket.size
+        n_splits = max(n_tokens // batch_size, 1)
+      if shuffle:
+        range_func = np.random.permutation
+      else:
+        range_func = np.arange
+      arr_sp = np.array_split(range_func(len(bucket)), n_splits)
+      for bkt_mb in arr_sp:
+        minibatches.append( (bkt_idx, bkt_mb) )
+    if shuffle:
+      np.random.shuffle(minibatches)
+    for bkt_idx, bkt_mb in minibatches:
+      feed_dict = {}
+      data = self[bkt_idx].data[bkt_mb]
+      sents = self[bkt_idx].sents[bkt_mb]
+      maxlen = np.max(np.sum(np.greater(data[:,:,0], 0), axis=1))
+
+      oov_pos = [np.where(s==unk_id) for s in sents]
+
+      feed_dict.update({
+        self.inputs: data[:,:maxlen,input_idxs],
+        self.targets: data[:,:maxlen,target_idxs]
+      })
+      yield feed_dict, oov_pos, sents
+
+
   #=============================================================
   @property
   def n_bkts(self):

@@ -36,15 +36,6 @@ from vocab import Vocab
 from dataset import Dataset
 
 
-def replace_with_gemb(inputs_0, gembedding, oov_pos):
-    emb_dim = gembedding.shape[2]
-    inputs_0_new = np.copy(inputs_0)
-    for i, oov in enumerate(gembedding):
-        for j, batch in enumerate(oov):
-            inputs_0_new[oov_pos[i],j,:emb_dim] = batch
-    return inputs_0_new
-
-
 #***************************************************************
 class Network(Configurable):
   """"""
@@ -219,11 +210,186 @@ class Network(Configurable):
       pass
     self.test(sess, validate=True)
     return
+
+
+  # assumes the sess has already been initialized
+  def train_gemb(self, sess):
+    """"""
     
+    save_path = os.path.join(self.save_dir, self.name.lower() + '-pretrained')
+    saver = tf.train.Saver(self.save_vars, max_to_keep=1)
+    
+    n_bkts = self.n_bkts
+    train_iters = self.train_iters
+    print_every = self.print_every
+    validate_every = self.validate_every
+    save_every = self.save_every
+    try:
+      train_time = 0
+      train_loss = 0
+      n_train_sents = 0
+      n_train_correct = 0
+      n_train_tokens = 0
+      n_train_iters = 0
+      total_train_iters = sess.run(self.global_step)
+      valid_time = 0
+      valid_loss = 0
+      valid_accuracy = 0
+      while total_train_iters < train_iters:
+        for j, (feed_dict, oov_pos, _) in enumerate(self.train_minibatches()):
+          train_inputs = feed_dict[self._trainset.inputs] # useless
+          train_targets = feed_dict[self._trainset.targets] # useless
+          feed_dict.update({self._model.oov_pos: oov_pos})
+          start_time = time.time()
+          _, loss = sess.run(self.ops['train_gemb_op'], feed_dict=feed_dict)
+          train_time += time.time() - start_time
+          train_loss += loss
+          n_train_sents += len(train_targets)
+          n_train_iters += 1
+          total_train_iters += 1
+          self.history['train_loss'].append(loss)
+          if total_train_iters == 1 or total_train_iters % validate_every == 0:
+            valid_time = 0
+            valid_loss = 0
+            n_valid_sents = 0
+            n_valid_correct = 0
+            n_valid_tokens = 0
+            with open(os.path.join(self.save_dir, 'sanitycheck.txt'), 'w') as f:
+              for k, (feed_dict, oov_pos, _) in enumerate(self.valid_minibatches()):
+                inputs = feed_dict[self._validset.inputs]
+                targets = feed_dict[self._validset.targets]
+                start_time = time.time()
+
+                # get gemb
+		      	feed_dict.update({self._model.oov_pos: oov_pos})
+		      	gembedding_new = sess.run(self.ops['get_gemb_op'], feed_dict=feed_dict)[0]
+		      	# replace with gemb
+		      	loss, n_correct, n_tokens, predictions = sess.run(self.ops['valid_op'], feed_dict={
+		      		self._validset.targets: targets,
+		      		self._model.gembedding_new: gembedding_new
+		      	})
+
+                valid_time += time.time() - start_time
+                valid_loss += loss
+                n_valid_sents += len(targets)
+                n_valid_correct += n_correct
+                n_valid_tokens += n_tokens
+                self.model.sanity_check(inputs, targets, predictions, self._vocabs, f, feed_dict={
+                		self._validset.inputs: inputs,
+                		self._validset.targets: targets
+                	})
+            valid_loss /= k+1
+            valid_accuracy = 100 * n_valid_correct / n_valid_tokens
+            valid_time = n_valid_sents / valid_time
+            self.history['valid_loss'].append(valid_loss)
+            self.history['valid_accuracy'].append(valid_accuracy)
+          if print_every and total_train_iters % print_every == 0:
+            train_loss /= n_train_iters
+            train_time = n_train_sents / train_time
+            print('%6d) Train loss: %.4f    Train rate: %6.1f sents/sec\n\tValid loss: %.4f    Valid acc: %5.2f%%    Valid rate: %6.1f sents/sec' % (total_train_iters, train_loss, train_time, valid_loss, valid_accuracy, valid_time))
+            train_time = 0
+            train_loss = 0
+            n_train_sents = 0
+            n_train_iters = 0
+        sess.run(self._global_epoch.assign_add(1.))
+        if save_every and (total_train_iters % save_every == 0):
+          saver.save(sess, os.path.join(self.save_dir, self.name.lower() + '-trained'),
+                     latest_filename=self.name.lower(),
+                     global_step=self.global_epoch,
+                     write_meta_graph=False)
+          with open(os.path.join(self.save_dir, 'history.pkl'), 'w') as f:
+            pkl.dump(self.history, f)
+          self.test(sess, validate=True)
+    except KeyboardInterrupt:
+      try:
+        raw_input('\nPress <Enter> to save or <Ctrl-C> to exit.')
+      except:
+        print('\r', end='')
+        sys.exit(0)
+    saver.save(sess, os.path.join(self.save_dir, self.name.lower() + '-trained'),
+               latest_filename=self.name.lower(),
+               global_step=self.global_epoch,
+               write_meta_graph=False)
+    with open(os.path.join(self.save_dir, 'history.pkl'), 'w') as f:
+      pkl.dump(self.history, f)
+    with open(os.path.join(self.save_dir, 'scores.txt'), 'w') as f:
+      pass
+    self.test(sess, validate=True)
+    return
+
+
   #=============================================================
   # TODO make this work if lines_per_buff isn't set to 0
+  def test_with_gemb(self, sess, validate=False):
+    """
+    self.model is a class: Parser
+    self._model is the instance of Parser class
+    """
+    if validate:
+      filename = self.valid_file
+      minibatches = self.valid_minibatches
+      dataset = self._validset
+      op = self.ops['test_op'][0]
+      # inputs_placeholder = self._validset.inputs
+      # targets_placeholder = self._validset.targets
+    else:
+      filename = self.test_file
+      minibatches = self.test_minibatches
+      dataset = self._testset
+      op = self.ops['test_op'][1]
+      # inputs_placeholder = self._testset.inputs
+      # targets_placeholder = self._testset.targets
+    
+    get_gemb_op = self.ops['get_gemb_op']
+
+    all_predictions = [[]]
+    all_sents = [[]]
+    bkt_idx = 0
+    for (feed_dict, oov_pos, sents) in minibatches():
+      mb_inputs = feed_dict[dataset.inputs]
+      mb_targets = feed_dict[dataset.targets]
+
+      # get gemb
+      feed_dict.update({self._model.oov_pos: oov_pos})
+      gembedding_new = sess.run(get_gemb_op, feed_dict=feed_dict)[0]
+
+      # replace with gemb
+      mb_probs = sess.run(op, feed_dict={
+      		dataset.targets: mb_targets,
+      		self._model.gembedding_new: gembedding_new
+      	})
+      all_predictions[-1].extend(self.model.validate(mb_inputs, mb_targets, mb_probs))
+      all_sents[-1].extend(sents)
+      if len(all_predictions[-1]) == len(dataset[bkt_idx]):
+        bkt_idx += 1
+        if bkt_idx < len(dataset._metabucket):
+          all_predictions.append([])
+          all_sents.append([])
+    with open(os.path.join(self.save_dir, os.path.basename(filename)), 'w') as f:
+      for bkt_idx, idx in dataset._metabucket.data:
+        data = dataset._metabucket[bkt_idx].data[idx][1:]
+        preds = all_predictions[bkt_idx][idx]
+        words = all_sents[bkt_idx][idx]
+        for i, (datum, word, pred) in enumerate(zip(data, words, preds)):
+          tup = (
+            i+1,
+            word,
+            self.tags[pred[3]] if pred[3] != -1 else self.tags[datum[2]],
+            self.tags[pred[4]] if pred[4] != -1 else self.tags[datum[3]],
+            str(pred[5]) if pred[5] != -1 else str(datum[4]),
+            self.rels[pred[6]] if pred[6] != -1 else self.rels[datum[5]],
+            str(pred[7]) if pred[7] != -1 else '_',
+            self.rels[pred[8]] if pred[8] != -1 else '_',
+          )
+          f.write('%s\t%s\t_\t%s\t%s\t_\t%s\t%s\t%s\t%s\n' % tup)
+        f.write('\n')
+    with open(os.path.join(self.save_dir, 'scores.txt'), 'a') as f:
+      s, _ = self.model.evaluate(os.path.join(self.save_dir, os.path.basename(filename)), punct=self.model.PUNCT)
+      f.write(s)
+    return
+
+
   def test(self, sess, validate=False):
-    """"""
     
     if validate:
       filename = self.valid_file
@@ -272,6 +438,7 @@ class Network(Configurable):
       s, _ = self.model.evaluate(os.path.join(self.save_dir, os.path.basename(filename)), punct=self.model.PUNCT)
       f.write(s)
     return
+
   
   #=============================================================
   def savefigs(self, sess, optimizer=False):
@@ -328,6 +495,13 @@ class Network(Configurable):
     ops['test_op'] = [valid_output['probabilities'],
                       test_output['probabilities']]
     ops['optimizer'] = optimizer
+
+
+    train_gemb_op = optimizer.minimize(self._model.gemb_loss,
+    	var_list=[var for var in tf.global_variables() if 'gemb/gemb_fc' in var.op.name])
+    ops['train_gemb_op'] = [train_gemb_op, self._model.gemb_loss]
+
+    ops['get_gemb_op'] = [self._model.gembedding]
     
     return ops
     
