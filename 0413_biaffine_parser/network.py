@@ -261,13 +261,13 @@ class Network(Configurable):
                 start_time = time.time()
 
                 # get gemb
-		      	feed_dict.update({self._model.oov_pos: oov_pos})
-		      	gembedding_new = sess.run(self.ops['get_gemb_op'], feed_dict=feed_dict)[0]
-		      	# replace with gemb
-		      	loss, n_correct, n_tokens, predictions = sess.run(self.ops['valid_op'], feed_dict={
-		      		self._validset.targets: targets,
-		      		self._model.gembedding_new: gembedding_new
-		      	})
+                feed_dict.update({self._model.oov_pos: oov_pos})
+                gembedding_new = sess.run(self.ops['get_gemb_op'], feed_dict=feed_dict)[0]
+                # replace with gemb
+                loss, n_correct, n_tokens, predictions = sess.run(self.ops['valid_op'], feed_dict={
+                    self._validset.targets: targets,
+                    self._model.gembedding_new: gembedding_new
+                })
 
                 valid_time += time.time() - start_time
                 valid_loss += loss
@@ -275,9 +275,9 @@ class Network(Configurable):
                 n_valid_correct += n_correct
                 n_valid_tokens += n_tokens
                 self.model.sanity_check(inputs, targets, predictions, self._vocabs, f, feed_dict={
-                		self._validset.inputs: inputs,
-                		self._validset.targets: targets
-                	})
+                        self._validset.inputs: inputs,
+                        self._validset.targets: targets
+                    })
             valid_loss /= k+1
             valid_accuracy = 100 * n_valid_correct / n_valid_tokens
             valid_time = n_valid_sents / valid_time
@@ -355,9 +355,9 @@ class Network(Configurable):
 
       # replace with gemb
       mb_probs = sess.run(op, feed_dict={
-      		dataset.targets: mb_targets,
-      		self._model.gembedding_new: gembedding_new
-      	})
+            dataset.targets: mb_targets,
+            self._model.gembedding_new: gembedding_new
+        })
       all_predictions[-1].extend(self.model.validate(mb_inputs, mb_targets, mb_probs))
       all_sents[-1].extend(sents)
       if len(all_predictions[-1]) == len(dataset[bkt_idx]):
@@ -482,6 +482,9 @@ class Network(Configurable):
     # These have to happen after optimizer.minimize is called
     valid_output = self._model(self._validset, moving_params=optimizer)
     test_output = self._model(self._testset, moving_params=optimizer)
+
+    self._model.gemb_graph()
+    self._model.insert_gemb_graph()
     
     ops = {}
     ops['train_op'] = [train_op,
@@ -498,7 +501,7 @@ class Network(Configurable):
 
 
     train_gemb_op = optimizer.minimize(self._model.gemb_loss,
-    	var_list=[var for var in tf.global_variables() if 'gemb/gemb_fc' in var.op.name])
+        var_list=[var for var in tf.global_variables() if 'gemb/gemb_fc' in var.op.name])
     ops['train_gemb_op'] = [train_gemb_op, self._model.gemb_loss]
 
     ops['get_gemb_op'] = [self._model.gembedding]
@@ -542,6 +545,8 @@ if __name__ == '__main__':
   argparser.add_argument('--load', action='store_true')
   argparser.add_argument('--model', default='Parser')
   argparser.add_argument('--matrix', action='store_true')
+  argparser.add_argument('--train-gemb', action='store_true')
+  argparser.add_argument('--test-gemb', action='store_true')
   
   args, extra_args = argparser.parse_known_args()
   cargs = {k: v for (k, v) in vars(Configurable.argparser.parse_args(extra_args)).iteritems() if v is not None}
@@ -572,7 +577,10 @@ if __name__ == '__main__':
       else:
         os.system('echo Loading: >> %s/HEAD' % network.save_dir)
         os.system('git rev-parse HEAD >> %s/HEAD' % network.save_dir)
-      network.train(sess)
+      if args.train_gemb:
+        network.train_gemb(sess)
+      else:
+        network.train(sess)
     elif args.matrix:
       saver = tf.train.Saver(var_list=network.save_vars)
       saver.restore(sess, tf.train.latest_checkpoint(network.save_dir, latest_filename=network.name.lower()))
@@ -591,7 +599,12 @@ if __name__ == '__main__':
       os.system('git rev-parse HEAD >> %s/HEAD' % network.save_dir)
       saver = tf.train.Saver(var_list=network.save_vars)
       saver.restore(sess, tf.train.latest_checkpoint(network.save_dir, latest_filename=network.name.lower()))
-      network.test(sess, validate=True)
-      start_time = time.time()
-      network.test(sess, validate=False)
+      if args.test_gemb:
+        network.test(sess, validate=True)
+        start_time = time.time()
+        network.test(sess, validate=False)
+      else:
+        network.test(sess, validate=True)
+        start_time = time.time()
+        network.test(sess, validate=False)
       print('Parsing took %f seconds' % (time.time() - start_time))

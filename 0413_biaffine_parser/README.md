@@ -4,6 +4,10 @@
 + Training and Testing procedure: ```network.py```
 + Data loading and formatting: ```dataset.py```
 
+### Run
+
+Add ```--train-gemb``` or ```--test-gemb``` to arguments.
+
 
 ----------------------------------
 This repository hosts the code in the paper [Deep Biaffine Attention for Neural Dependency Parsing](https://arxiv.org/abs/1611.01734). It has been modified to work with the latest tensorflow version. 
