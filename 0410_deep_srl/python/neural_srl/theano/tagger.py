@@ -73,10 +73,72 @@ class BiLSTMTaggerModel(object):
   def add_gemb(self):
     # embedding_shapes[0]: word embedding shape; embedding_shapes[0][1]: num_words
     self.gemb = GembModel(self.lstm_hidden_size*2, self.embedding_layer.embedding_shapes[0][0])
-    self.get_gemb_loss_function = get_gemb_loss_function
-    self.get_ctx_emb_function = get_ctx_emb_function
-    self.get_distribution_by_ctx_emb_function = get_distribution_by_ctx_emb_function
+  
+  # GEMB stuff
+  def get_ctx_emb_function(self):
+    """
+    Return embeddings, with OOVs replaced by context-estimation
+    Used at test time
+    """
+    oov_pos = tensor.lvector('oov_pos_pred')
+
+    fw_states = self.inputs[1] # (sent_len, batch, hidden_dim)
+    bw_states = self.inputs[2] # (sent_len, batch, hidden_dim)
+    emb_mat = self.embedding_layer.embeddings[0]
+
+    feat = self.gemb.mlp.connect([fw_states[oov_pos -1], bw_states[oov_pos+1]]) # (oov_num, batch, num_words)
+    probs = tensor.nnet.softmax(feat.reshape(feat.shape[0]*feat.shape[1], feat.shape[2])) # (oov_num*batch, num_words)
+    emb_reweight = probs.dimshuffle(0,1,'x') * emb_mat # (oov_num*batch, num_words, emb_dim)
+    gembedding = emb_reweight.sum(axis=1).reshape(feat.shape[0], feat.shape[1], -1) # ??? (oov_num, batch, emb_dim)
+
+    return theano.function([self.x0, self.mask0, oov_pos], [gembedding, self.inputs[0]],
+                name='gemb_pred',
+                on_unused_input='warn')
+    # done for now
+
+  def get_gemb_loss_function(self):
+    oov_pos = tensor.lvector('oov_pos')
+
+    fw_states = self.inputs[1] # (sent_len, batch, hidden_dim)
+    bw_states = self.inputs[2] # (sent_len, batch, hidden_dim)
+    emb_mat = self.embedding_layer.embeddings[0]
+
+    feat = self.gemb.mlp.connect([fw_states[oov_pos -1], bw_states[oov_pos+1]]) # (oov_num, batch, num_words)
     
+    # Bug: reshapre requires the parameters to be integers.
+    #   How do we evaliuate "feat.shape" to get ints?
+    probs = tensor.nnet.softmax(feat.reshape(feat.shape[0]*feat.shape[1], feat.shape[2])) # (oov_num*batch, num_words)
+    log_probs = tensor.log(probs).reshape(feat.shape[0], feat.shape[1], -1) # (oov_num, batch, num_words)
+
+    loss = CrossEntropyLoss().connect(log_probs, self.mask[oov_pos], self.x[oov_pos,:,0])
+
+    grads = gradient_clipping(tensor.grad(loss, self.gemb.params),
+                  self.max_grad_norm)
+    updates = adadelta(self.gemb.params, grads)
+
+    return theano.function([self.x0, self.mask0, oov_pos], loss,
+                 name='f_gemb_loss',
+                 updates=updates,
+                 on_unused_input='warn',
+                 givens=({self.is_train: numpy.cast['int8'](1)}))
+
+  def get_distribution_by_ctx_emb_function(self):
+    """ Return predictions and scores of shape [batch_size, time_steps, label space size].
+        Used at test time.
+    """
+    inputs_0 = tensor.ltensor3('inputs_0')
+    self.inputs[0] = inputs_0
+
+     # (sent_len, batch_size, label_space_size) --> (batch_size, sent_len, label_space_size)
+    scores0 = self.scores.reshape([self.inputs[0].shape[0], self.inputs[0].shape[1],
+                     self.label_space_size]).dimshuffle(1, 0, 2)
+                      
+    return theano.function([inputs_0, self.mask0], [self.pred0, scores0],
+                 name='f_ctx_gemb_pred',
+                 allow_input_downcast=True,
+                 on_unused_input='warn',
+                 givens=({self.is_train:  numpy.cast['int8'](0)}))
+
   def get_eval_function(self):  
     """ We should feed in non-dimshuffled inputs x0, mask0 and y0.
         Used for tracking Dev loss at training time.

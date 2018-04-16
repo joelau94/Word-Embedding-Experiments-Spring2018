@@ -89,7 +89,7 @@ def train_gemb(args):
 
   with Timer('Building model'):
     model = BiLSTMTaggerModel(data, config=config)
-    model.load(os.path.join(args.model, 'model'))
+    model.load(os.path.join(args.model, 'model.npz'))
     model.add_gemb() 
     for param in model.gemb.params:
       print param, param.name, param.shape.eval()

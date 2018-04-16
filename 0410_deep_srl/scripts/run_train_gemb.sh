@@ -8,7 +8,8 @@ TRAIN_PATH="data/srl/conll2012.train.txt"
 DEV_PATH="data/srl/conll2012.devel.txt"
 GOLD_PATH="data/srl/conll2012.devel.props.gold.txt"
 
-THEANO_FLAGS="mode=FAST_RUN,device=gpu$1,floatX=float32,lib.cnmem=0.9" python python/train.py \
+#THEANO_FLAGS="mode=FAST_RUN,device=gpu$1,floatX=float32,lib.cnmem=0.9" python python/train_gemb.py \
+THEANO_FLAGS="mode=FAST_RUN,device=cpu" python python/train_gemb.py \
    --config=$CONFIG \
    --model=$MODEL \
    --gemb-model=$GEMB_MODEL \
