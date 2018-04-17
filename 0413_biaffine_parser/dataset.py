@@ -192,10 +192,14 @@ class Dataset(Configurable):
       data = self[bkt_idx].data[bkt_mb]
       sents = self[bkt_idx].sents[bkt_mb]
       maxlen = np.max(np.sum(np.greater(data[:,:,0], 0), axis=1))
-
+      unk_id = self.vocabs[0]._str2idx['<UNK>']
+        
       no_oov = [i for i,s in enumerate(sents) if unk_id not in s] # get unk_id somehow?
       data_no_oov = data[no_oov]
       oov_pos = np.random.randint(1, maxlen-1, size=[len(no_oov),1]) # one oov each sent
+      oov_pos = np.squeeze( oov_pos + \
+                        np.reshape(oov_pos.shape[1] * \
+                        np.arange(oov_pos.shape[0]), [-1,1]))
 
       feed_dict.update({
         self.inputs: data_no_oov[:,:maxlen,input_idxs],
@@ -228,8 +232,12 @@ class Dataset(Configurable):
       data = self[bkt_idx].data[bkt_mb]
       sents = self[bkt_idx].sents[bkt_mb]
       maxlen = np.max(np.sum(np.greater(data[:,:,0], 0), axis=1))
+      unk_id = self.vocabs[0]._str2idx['<UNK>']
 
       oov_pos = [np.where(s==unk_id) for s in sents]
+      oov_pos = np.squeeze( oov_pos + \
+                        np.reshape(oov_pos.shape[1] * \
+                        np.arange(oov_pos.shape[0]), [-1,1]) )
 
       feed_dict.update({
         self.inputs: data[:,:maxlen,input_idxs],

@@ -93,6 +93,13 @@ class Network(Configurable):
     return self._trainset.get_minibatches(self.train_batch_size,
                                           self.model.input_idxs,
                                           self.model.target_idxs)
+
+  def train_gemb_minibatches(self):
+    """"""
+    
+    return self._trainset.get_minibatches_gemb_train(self.train_batch_size,
+                                          self.model.input_idxs,
+                                          self.model.target_idxs)
   
   #=============================================================
   def valid_minibatches(self):
@@ -108,6 +115,14 @@ class Network(Configurable):
     """"""
     
     return self._testset.get_minibatches(self.test_batch_size,
+                                          self.model.input_idxs,
+                                          self.model.target_idxs,
+                                          shuffle=False)
+
+  def test_gemb_minibatches(self):
+    """"""
+    
+    return self._testset.get_minibatches_gemb_test(self.test_batch_size,
                                           self.model.input_idxs,
                                           self.model.target_idxs,
                                           shuffle=False)
@@ -236,7 +251,7 @@ class Network(Configurable):
       valid_loss = 0
       valid_accuracy = 0
       while total_train_iters < train_iters:
-        for j, (feed_dict, oov_pos, _) in enumerate(self.train_minibatches()):
+        for j, (feed_dict, oov_pos, _) in enumerate(self.train_gemb_minibatches()):
           train_inputs = feed_dict[self._trainset.inputs] # useless
           train_targets = feed_dict[self._trainset.targets] # useless
           feed_dict.update({self._model.oov_pos: oov_pos})
@@ -334,7 +349,7 @@ class Network(Configurable):
       # targets_placeholder = self._validset.targets
     else:
       filename = self.test_file
-      minibatches = self.test_minibatches
+      minibatches = self.test_gemb_minibatches
       dataset = self._testset
       op = self.ops['test_op'][1]
       # inputs_placeholder = self._testset.inputs
@@ -499,8 +514,8 @@ class Network(Configurable):
                       test_output['probabilities']]
     ops['optimizer'] = optimizer
 
-
-    train_gemb_op = optimizer.minimize(self._model.gemb_loss,
+    optimizer2 = optimizers.RadamOptimizerMod(self._config, global_step=self.global_step)
+    train_gemb_op = optimizer2.minimize(self._model.gemb_loss,
         var_list=[var for var in tf.global_variables() if 'gemb/gemb_fc' in var.op.name])
     ops['train_gemb_op'] = [train_gemb_op, self._model.gemb_loss]
 
