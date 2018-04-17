@@ -17,3 +17,4 @@
 
 from sgd_optimizer import SGDOptimizer 
 from radam_optimizer import RadamOptimizer
+from radam_optimizer_mod import RadamOptimizerMod

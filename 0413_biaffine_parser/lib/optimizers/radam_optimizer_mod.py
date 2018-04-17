@@ -24,14 +24,56 @@ import tensorflow as tf
 from lib.optimizers.base_optimizer import BaseOptimizer
 
 #***************************************************************
-class RadamOptimizer(BaseOptimizer):
+class RadamOptimizerMod(BaseOptimizer):
   """"""
-  
+  def minimize(self, loss, var_list, name=None):
+    """"""
+    
+    # Error checking
+    #var_list = tf.trainable_variables()
+    for x_tm1 in var_list:
+      if not isinstance(x_tm1, tf.Variable):
+        raise TypeError("Argument is not a tf.Variable: %s" % x_tm1)
+    if not var_list:
+      raise ValueError("No variables to optimize")
+    if loss.dtype.base_dtype != tf.float32:
+      raise ValueError('Loss is not float32')
+    
+    # Compute gradients
+    var_refs = [x_tm1._ref() for x_tm1 in var_list]
+    grads = tf.gradients(loss, var_refs,
+                                colocate_gradients_with_ops=True,
+                                gate_gradients=True,
+                                aggregation_method=2)
+    for x_tm1, g_t in zip(var_list, grads):
+      if g_t is not None:
+        if x_tm1.dtype.base_dtype != tf.float32:
+          raise ValueError('%s is not float32' % x_tm1.name)
+
+    # Apply gradients
+    with tf.control_dependencies(None):
+      self._init_acc(var_list, grads)
+    with tf.name_scope(values=[], name=name, default_name=self._name) as name:
+      caches = filter(lambda cache: cache['g_t'] is not None, self._prepare(var_list, grads))
+      for cache in caches:
+        x_tm1, g_t = cache['x_tm1'], cache['g_t']
+        with tf.name_scope("update_" + x_tm1.op.name), tf.device(x_tm1.device):
+          if isinstance(g_t, tf.Tensor):
+            cache['g_t'] = tf.where(tf.is_finite(g_t), g_t, tf.zeros_like(g_t))
+            self._apply_dense(cache)
+          else:
+            cache['g_t'] = tf.where(tf.is_finite(g_t.values), g_t.values, tf.zeros_like(g_t.values))
+            cache['idxs'] = g_t.indices
+            self._apply_sparse(cache)
+      with tf.control_dependencies([self._finish(caches)]):
+        with tf.device(self.global_step.device):
+          return tf.assign_add(self.global_step, 1, name=name).op
+
   #=============================================================
   def _init_acc(self, var_list, grads):
     """"""
     
-    super(RadamOptimizer, self)._init_acc(var_list, grads)
+    super(RadamOptimizerMod, self)._init_acc(var_list, grads)
     for x_tm1, g_t in zip(var_list, grads):
       if self.mu > 0:
         self.get_accumulator(x_tm1, 'm')
