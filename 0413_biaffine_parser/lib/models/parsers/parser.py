@@ -7,6 +7,7 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
+import pdb
 
 from vocab import Vocab
 from lib.models.parsers.base_parser import BaseParser
@@ -93,7 +94,7 @@ class Parser(BaseParser):
     output['arc_logits'] = arc_logits
     output['rel_logits'] = rel_logits
 
-    self.output = output # for easy retrieval
+    self.output_val = output # for easy retrieval
     return output
 
   def gemb_graph(self):
@@ -101,15 +102,25 @@ class Parser(BaseParser):
     Build graph used for generating GEMB
     recur_states_1: first layer of BiRNN, should pass in output['recur'][1]
     '''
-    self.oov_pos = tf.placeholder(dtype=tf.int32, shape=(None,None), name='oov_pos')
+    self.oov_pos = tf.placeholder(dtype=tf.int32, shape=(None), name='oov_pos')
     embed_mat = self.vocabs[0].trainable_embeddings
     vocab_size = embed_mat.get_shape().as_list()[0]
-    recur_states_1 = self.output['recur'][1]
-    ctx = tf.concat([tf.split(recur_states_1[oov_pos-1], 2, axis=-1)[0],
-                    tf.split(recur_states_1[oov_pos+1], 2, axis=-1)],
+    recur_states_1 = self.output_val['recur'][1]
+    #pdb.set_trace()
+    dim1 = tf.shape(recur_states_1)[0]
+    dim2 = tf.shape(recur_states_1)[1]
+    dim3 = tf.shape(recur_states_1)[2]
+
+    recur_states_1_reshaped = tf.reshape(recur_states_1,[dim1*dim2, dim3])
+    #recur_states_1_reshaped[self.oov_pos-1]
+    
+    ctx = tf.concat([tf.split(recur_states_1_reshaped[self.oov_pos-1], num_or_size_splits = 2, axis=-1)[0],
+                    tf.split(recur_states_1_reshaped[self.oov_pos+1], num_or_size_splits = 2, axis=-1)[0]],
                     axis=-1)
+                    
+    ctx_reshaped = tf.reshape(ctx, tf.shape(recur_states_1))                
     with tf.variable_scope('gemb'):
-      feat = tf.contrib.layers.fully_connected(inputs=ctx,
+      feat = tf.contrib.layers.fully_connected(inputs=ctx_reshaped,
             num_outputs=len(self.vocabs[0]._str2idx),
             activation_fn=None,
             scope='gemb_fc')
@@ -119,7 +130,7 @@ class Parser(BaseParser):
     self.gembedding = tf.reduce_sum(tf.expand_dims(self.gemb_scores, axis=-1) * embed_mat, axis=-2)
 
     # for training
-    self.gemb_loss = tf.nn.softmax_cross_entropy_with_logits(feat, self.inputs[oov_pos,:,0])
+    self.gemb_loss = tf.nn.softmax_cross_entropy_with_logits(logits = feat, labels = self.inputs[self.oov_pos,:,0])
 
   def insert_gemb_graph(self):
     '''
