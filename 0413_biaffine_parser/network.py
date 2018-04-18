@@ -255,6 +255,8 @@ class Network(Configurable):
           train_inputs = feed_dict[self._trainset.inputs] # useless
           train_targets = feed_dict[self._trainset.targets] # useless
           feed_dict.update({self._model.oov_pos: oov_pos})
+          if train_inputs.shape[0] <= 0:
+            continue
           start_time = time.time()
           _, loss = sess.run(self.ops['train_gemb_op'], feed_dict=feed_dict)
           train_time += time.time() - start_time

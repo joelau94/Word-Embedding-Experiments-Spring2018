@@ -130,7 +130,12 @@ class Parser(BaseParser):
     self.gembedding = tf.reduce_sum(tf.expand_dims(self.gemb_scores, axis=-1) * embed_mat, axis=-2)
 
     # for training
-    self.gemb_loss = tf.nn.softmax_cross_entropy_with_logits(logits = feat, labels = self.inputs[self.oov_pos,:,0])
+    # print(tf.shape(feat)) # (3,)
+    # print(feat.get_shape()) # (?, ?, 21679)
+    # print(tf.shape(tf.squeeze(feat)))
+    # print(feat.get_shape())
+    # print(tf.shape(tf.one_hot(self.inputs[self.oov_pos,:,0], len(self.vocabs[0]._str2idx))))
+    self.gemb_loss = tf.nn.softmax_cross_entropy_with_logits(logits = tf.transpose(tf.squeeze(feat)), labels = tf.one_hot(self.inputs[self.oov_pos,:,0], len(self.vocabs[0]._str2idx)))
 
   def insert_gemb_graph(self):
     '''
