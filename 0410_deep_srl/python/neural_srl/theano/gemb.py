@@ -58,19 +58,3 @@ def replace_with_gemb(inputs_0, gembedding, oov_pos):
         for j, batch in enumerate(oov):
             inputs_0_new[oov_pos[i],j,:emb_dim] = batch
     return inputs_0_new
-
-
-def get_eval_with_gemb_function(self):
-    inputs_0 = tensor.ltensor3('inputs_0')
-    self.inputs[0] = inputs_0
-
-     # (sent_len, batch_size, label_space_size) --> (batch_size, sent_len, label_space_size)
-    scores0 = self.scores.reshape([self.inputs[0].shape[0], self.inputs[0].shape[1],
-                     self.label_space_size]).dimshuffle(1, 0, 2)
-
-    loss = CrossEntropyLoss().connect(self.scores, self.mask, self.y)
-    return theano.function([inputs_0, self.mask0, self.y0], [self.pred0, loss],
-                 name='f_gemb_eval',
-                 allow_input_downcast=True,
-                 on_unused_input='warn',
-                 givens=({self.is_train:  numpy.cast['int8'](0)}))

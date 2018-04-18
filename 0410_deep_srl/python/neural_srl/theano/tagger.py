@@ -107,8 +107,8 @@ class BiLSTMTaggerModel(object):
     
     # Bug: reshapre requires the parameters to be integers.
     #   How do we evaliuate "feat.shape" to get ints?
-    probs = tensor.nnet.softmax(feat.reshape(feat.shape[0]*feat.shape[1], feat.shape[2])) # (oov_num*batch, num_words)
-    log_probs = tensor.log(probs).reshape(feat.shape[0], feat.shape[1], -1) # (oov_num, batch, num_words)
+    probs = tensor.nnet.softmax(feat.reshape([feat.shape[0]*feat.shape[1], feat.shape[2]])) # (oov_num*batch, num_words)
+    log_probs = tensor.log(probs).reshape([feat.shape[0], feat.shape[1], -1]) # (oov_num, batch, num_words)
 
     loss = CrossEntropyLoss().connect(log_probs, self.mask[oov_pos], self.x[oov_pos,:,0])
 
@@ -135,6 +135,21 @@ class BiLSTMTaggerModel(object):
                       
     return theano.function([inputs_0, self.mask0], [self.pred0, scores0],
                  name='f_ctx_gemb_pred',
+                 allow_input_downcast=True,
+                 on_unused_input='warn',
+                 givens=({self.is_train:  numpy.cast['int8'](0)}))
+
+  def get_eval_with_gemb_function(self):
+    inputs_0 = tensor.ltensor3('inputs_0')
+    self.inputs[0] = inputs_0
+
+     # (sent_len, batch_size, label_space_size) --> (batch_size, sent_len, label_space_size)
+    scores0 = self.scores.reshape([self.inputs[0].shape[0], self.inputs[0].shape[1],
+                     self.label_space_size]).dimshuffle(1, 0, 2)
+
+    loss = CrossEntropyLoss().connect(self.scores, self.mask, self.y)
+    return theano.function([inputs_0, self.mask0, self.y0], [self.pred0, loss],
+                 name='f_gemb_eval',
                  allow_input_downcast=True,
                  on_unused_input='warn',
                  givens=({self.is_train:  numpy.cast['int8'](0)}))
