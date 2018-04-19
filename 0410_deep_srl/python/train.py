@@ -88,6 +88,9 @@ def train_tagger(args):
       print param, param.name, param.shape.eval()
     loss_function = model.get_loss_function()
     eval_function = model.get_eval_function()
+
+  model.save(os.path.join(args.model, 'model'))
+  return
   
   while epoch < config.max_epochs:
     with Timer("Epoch%d" % epoch) as timer:

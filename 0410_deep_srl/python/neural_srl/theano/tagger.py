@@ -27,7 +27,7 @@ class BiLSTMTaggerModel(object):
     # Initialize layers and parameters
     self.embedding_layer = EmbeddingLayer(data.embedding_shapes, data.embeddings)    
     self.params = [p for p in self.embedding_layer.params]
-    
+
     self.rnn_layers = [None] * self.num_lstm_layers
     for l in range(self.num_lstm_layers):
       input_dim = self.embedding_layer.output_size if l == 0 else self.lstm_hidden_size
@@ -68,7 +68,7 @@ class BiLSTMTaggerModel(object):
       self.inputs[l+1] = outputs[::-1]
      
     self.scores, self.pred = self.softmax_layer.connect(self.inputs[-1])
-    self.pred0 = self.pred.reshape([self.x.shape[0], self.x.shape[1]]).dimshuffle(1, 0)
+    self.pred0 = self.pred.reshape([self.mask.shape[0], self.mask.shape[1]]).dimshuffle(1, 0)
 
   def add_gemb(self):
     # embedding_shapes[0]: word embedding shape; embedding_shapes[0][1]: num_words
@@ -82,18 +82,29 @@ class BiLSTMTaggerModel(object):
     """
     oov_pos = tensor.lvector('oov_pos_pred')
 
+    self.inputs = [None] * (self.num_lstm_layers + 1)
+    self.inputs[0] = self.embedding_layer.connect(self.x)
+    self.rev_mask = self.mask[::-1]
+    
+    for l, rnn in enumerate(self.rnn_layers):
+      outputs = rnn.connect(self.inputs[l],
+                  self.mask if l % 2 == 0 else self.rev_mask,
+                  self.is_train)
+      self.inputs[l+1] = outputs[::-1]
+
     fw_states = self.inputs[1] # (sent_len, batch, hidden_dim)
     bw_states = self.inputs[2] # (sent_len, batch, hidden_dim)
     emb_mat = self.embedding_layer.embeddings[0]
 
     feat = self.gemb.mlp.connect([fw_states[oov_pos -1], bw_states[oov_pos+1]]) # (oov_num, batch, num_words)
-    probs = tensor.nnet.softmax(feat.reshape(feat.shape[0]*feat.shape[1], feat.shape[2])) # (oov_num*batch, num_words)
+    probs = tensor.nnet.softmax(feat.reshape([feat.shape[0]*feat.shape[1], feat.shape[2]])) # (oov_num*batch, num_words)
     emb_reweight = probs.dimshuffle(0,1,'x') * emb_mat # (oov_num*batch, num_words, emb_dim)
-    gembedding = emb_reweight.sum(axis=1).reshape(feat.shape[0], feat.shape[1], -1) # ??? (oov_num, batch, emb_dim)
+    gembedding = emb_reweight.sum(axis=1).reshape([feat.shape[0], feat.shape[1], -1]) # ??? (oov_num, batch, emb_dim)
 
     return theano.function([self.x0, self.mask0, oov_pos], [gembedding, self.inputs[0]],
                 name='gemb_pred',
-                on_unused_input='warn')
+                on_unused_input='warn',
+                givens=({self.is_train: numpy.cast['int8'](1)}))
     # done for now
 
   def get_gemb_loss_function(self):
@@ -127,7 +138,19 @@ class BiLSTMTaggerModel(object):
         Used at test time.
     """
     inputs_0 = tensor.ltensor3('inputs_0')
+
+    self.inputs = [None] * (self.num_lstm_layers + 1)
     self.inputs[0] = inputs_0
+    self.rev_mask = self.mask[::-1]
+    
+    for l, rnn in enumerate(self.rnn_layers):
+      outputs = rnn.connect(self.inputs[l],
+                  self.mask if l % 2 == 0 else self.rev_mask,
+                  self.is_train)
+      self.inputs[l+1] = outputs[::-1]
+
+    self.scores, self.pred = self.softmax_layer.connect(self.inputs[-1])
+    self.pred0 = self.pred.reshape([self.mask.shape[0], self.mask.shape[1]]).dimshuffle(1, 0)
 
      # (sent_len, batch_size, label_space_size) --> (batch_size, sent_len, label_space_size)
     scores0 = self.scores.reshape([self.inputs[0].shape[0], self.inputs[0].shape[1],
@@ -141,7 +164,19 @@ class BiLSTMTaggerModel(object):
 
   def get_eval_with_gemb_function(self):
     inputs_0 = tensor.ltensor3('inputs_0')
+
+    self.inputs = [None] * (self.num_lstm_layers + 1)
     self.inputs[0] = inputs_0
+    self.rev_mask = self.mask[::-1]
+    
+    for l, rnn in enumerate(self.rnn_layers):
+      outputs = rnn.connect(self.inputs[l],
+                  self.mask if l % 2 == 0 else self.rev_mask,
+                  self.is_train)
+      self.inputs[l+1] = outputs[::-1]
+
+    self.scores, self.pred = self.softmax_layer.connect(self.inputs[-1])
+    self.pred0 = self.pred.reshape([self.mask.shape[0], self.mask.shape[1]]).dimshuffle(1, 0)
 
      # (sent_len, batch_size, label_space_size) --> (batch_size, sent_len, label_space_size)
     scores0 = self.scores.reshape([self.inputs[0].shape[0], self.inputs[0].shape[1],

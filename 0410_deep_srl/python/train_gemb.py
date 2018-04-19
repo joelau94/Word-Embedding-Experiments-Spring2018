@@ -69,7 +69,7 @@ def train_gemb(args):
       evaluator = PropIdEvaluator(data.get_development_data(),
                                   data.label_dict)
 
-    batched_dev_data = data.get_development_data(batch_size=config.dev_batch_size)
+    batched_dev_data = data.get_gemb_development_data(batch_size=config.dev_batch_size)
     print ('Dev data has {} batches.'.format(len(batched_dev_data)))
   
   with Timer('Preparation'):
@@ -99,7 +99,7 @@ def train_gemb(args):
   
   while epoch < config.max_epochs:
     with Timer("Epoch%d" % epoch) as timer:
-      train_data = data.get_training_data(include_last_batch=True)
+      train_data = data.get_gemb_training_data(include_last_batch=True)
       for batched_tensor in train_data:
         x, y, oov_pos, _, weights = batched_tensor
         loss = gemb_loss_function(x, weights, oov_pos)
