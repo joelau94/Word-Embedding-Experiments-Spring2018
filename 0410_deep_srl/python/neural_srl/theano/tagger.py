@@ -73,6 +73,7 @@ class BiLSTMTaggerModel(object):
   def add_gemb(self):
     # embedding_shapes[0]: word embedding shape; embedding_shapes[0][1]: num_words
     self.gemb = GembModel(self.lstm_hidden_size*2, self.embedding_layer.embedding_shapes[0][0])
+    print('Vocab Size: {}'.format(self.embedding_layer.embedding_shapes[0][0]))
   
   # GEMB stuff
   def get_ctx_emb_function(self):
@@ -96,7 +97,7 @@ class BiLSTMTaggerModel(object):
     bw_states = self.inputs[2] # (sent_len, batch, hidden_dim)
     emb_mat = self.embedding_layer.embeddings[0]
 
-    feat = self.gemb.mlp.connect([fw_states[oov_pos -1], bw_states[oov_pos+1]]) # (oov_num, batch, num_words)
+    feat = self.gemb.mlp.connect(tensor.concatenate([fw_states[oov_pos -1], bw_states[oov_pos+1]], axis=-1)) # (oov_num, batch, num_words)
     probs = tensor.nnet.softmax(feat.reshape([feat.shape[0]*feat.shape[1], feat.shape[2]])) # (oov_num*batch, num_words)
     emb_reweight = probs.dimshuffle(0,1,'x') * emb_mat # (oov_num*batch, num_words, emb_dim)
     gembedding = emb_reweight.sum(axis=1).reshape([feat.shape[0], feat.shape[1], -1]) # ??? (oov_num, batch, emb_dim)
@@ -110,18 +111,22 @@ class BiLSTMTaggerModel(object):
   def get_gemb_loss_function(self):
     oov_pos = tensor.lvector('oov_pos')
 
+    oov_pos_x = oov_pos.flatten()
+    oov_pos_y = tensor.arange(oov_pos_x.shape[0])
+
     fw_states = self.inputs[1] # (sent_len, batch, hidden_dim)
     bw_states = self.inputs[2] # (sent_len, batch, hidden_dim)
     emb_mat = self.embedding_layer.embeddings[0]
 
-    feat = self.gemb.mlp.connect([fw_states[oov_pos -1], bw_states[oov_pos+1]]) # (oov_num, batch, num_words)
+    preact = tensor.concatenate([fw_states[oov_pos_x-1,oov_pos_y,:], bw_states[oov_pos_x+1,oov_pos_y,:]], axis=-1)
+    feat = self.gemb.mlp.connect(preact) # (oov_num, batch, num_words)
     
     # Bug: reshapre requires the parameters to be integers.
     #   How do we evaliuate "feat.shape" to get ints?
-    probs = tensor.nnet.softmax(feat.reshape([feat.shape[0]*feat.shape[1], feat.shape[2]])) # (oov_num*batch, num_words)
-    log_probs = tensor.log(probs).reshape([feat.shape[0], feat.shape[1], -1]) # (oov_num, batch, num_words)
+    probs = tensor.nnet.softmax(feat) # (oov_num*batch, num_words) oov_num=1 fixed
+    log_probs = tensor.log(probs)
 
-    loss = CrossEntropyLoss().connect(log_probs, self.mask[oov_pos], self.x[oov_pos,:,0])
+    loss = CrossEntropyLoss().connect(inputs=log_probs, weights=None, labels=self.x[oov_pos_x,oov_pos_y,0].reshape([-1,1]))
 
     grads = gradient_clipping(tensor.grad(loss, self.gemb.params),
                   self.max_grad_norm)

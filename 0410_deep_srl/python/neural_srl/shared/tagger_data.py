@@ -140,7 +140,7 @@ class TaggerData(object):
       return [np.array(v) for v in zip(*self.gemb_dev_tensors)]
     
     num_samples = len(self.dev_sents)
-    batched_tensors = [self.dev_tensors[i: min(i+ batch_size, num_samples)]
+    batched_tensors = [self.gemb_dev_tensors[i: min(i+ batch_size, num_samples)]
                for i in xrange(0, num_samples, batch_size)]
     return [zip(*t) for t in batched_tensors]
   

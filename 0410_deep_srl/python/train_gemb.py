@@ -56,7 +56,7 @@ def train_gemb(args):
       # Data and evaluator for SRL.
       data = TaggerData(config,
                         *reader.get_srl_data(config, args.train, args.dev, vocab_path, label_path))
-      evaluator = SRLEvaluator(data.get_development_data(),
+      evaluator = SRLEvaluator(data.get_gemb_development_data(),
                                data.label_dict,
                                gold_props_file=gold_props_path,
                                use_se_marker=config.use_se_marker,
