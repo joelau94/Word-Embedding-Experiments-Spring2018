@@ -1,5 +1,9 @@
 # Deep SRL (v180410)
 
+Bug-free on toy data.
+
+Now freezed. Development continue on v180420.
+
 ### Major changes compared to original code:
 + ```python/train_gemb.py```: train GEMB params
 + ```python/predict_gemb.py```: predict with GEMB replacing OOV embeddings
