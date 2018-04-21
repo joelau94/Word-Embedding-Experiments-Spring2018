@@ -100,7 +100,15 @@ class Network(Configurable):
     return self._trainset.get_minibatches_gemb_train(self.train_batch_size,
                                           self.model.input_idxs,
                                           self.model.target_idxs)
+  def valid_gemb_minibatches(self):
+    """"""
+    
+    return self._validset.get_minibatches_gemb_train(1,
+                                          self.model.input_idxs,
+                                          self.model.target_idxs,
+                                          shuffle = False)
   
+
   #=============================================================
   def valid_minibatches(self):
     """"""
@@ -251,87 +259,94 @@ class Network(Configurable):
       valid_loss = 0
       valid_accuracy = 0
       while total_train_iters < train_iters:
+        print("Iteration:", total_train_iters)
         for j, (feed_dict, oov_pos, _) in enumerate(self.train_gemb_minibatches()):
           train_inputs = feed_dict[self._trainset.inputs] # useless
           train_targets = feed_dict[self._trainset.targets] # useless
           feed_dict.update({self._model.oov_pos: oov_pos})
-          if train_inputs.shape[0] <= 0:
-            continue
+          print("OOV : " , oov_pos)
           start_time = time.time()
-          _, loss = sess.run(self.ops['train_gemb_op'], feed_dict=feed_dict)
+          logits, labels,_, loss = sess.run(self.ops['train_gemb_op'], feed_dict=feed_dict)
+          print("LOGITS: ", logits)
+          print("LABELS: ", labels)
+          print("LOSS: ", loss)
+          
+        #   print("OUTPUT STUFF:", output_stuff)
           train_time += time.time() - start_time
-          train_loss += loss
+        #   train_loss += loss
           n_train_sents += len(train_targets)
           n_train_iters += 1
           total_train_iters += 1
-          self.history['train_loss'].append(loss)
-          if total_train_iters == 1 or total_train_iters % validate_every == 0:
-            valid_time = 0
-            valid_loss = 0
-            n_valid_sents = 0
-            n_valid_correct = 0
-            n_valid_tokens = 0
-            with open(os.path.join(self.save_dir, 'sanitycheck.txt'), 'w') as f:
-              for k, (feed_dict, oov_pos, _) in enumerate(self.valid_minibatches()):
-                inputs = feed_dict[self._validset.inputs]
-                targets = feed_dict[self._validset.targets]
-                start_time = time.time()
+          break
+        break
+        #   self.history['train_loss'].append(loss)
+        #   if total_train_iters == 1 or total_train_iters % validate_every == 0:
+        #     valid_time = 0
+        #     valid_loss = 0
+        #     n_valid_sents = 0
+        #     n_valid_correct = 0
+        #     n_valid_tokens = 0
+        #     with open(os.path.join(self.save_dir, 'sanitycheck.txt'), 'w') as f:
+        #       for k, (feed_dict, oov_pos, _) in enumerate(self.valid_gemb_minibatches()):
+        #         inputs = feed_dict[self._validset.inputs]
+        #         targets = feed_dict[self._validset.targets]
+        #         start_time = time.time()
 
-                # get gemb
-                feed_dict.update({self._model.oov_pos: oov_pos})
-                gembedding_new = sess.run(self.ops['get_gemb_op'], feed_dict=feed_dict)[0]
-                # replace with gemb
-                loss, n_correct, n_tokens, predictions = sess.run(self.ops['valid_op'], feed_dict={
-                    self._validset.targets: targets,
-                    self._model.gembedding_new: gembedding_new
-                })
+        #         # get gemb
+        #         feed_dict.update({self._model.oov_pos: oov_pos})
+        #         gembedding_new = sess.run(self.ops['get_gemb_op'], feed_dict=feed_dict)[0]
+        #         # replace with gemb
+        #         loss, n_correct, n_tokens, predictions = sess.run(self.ops['valid_op'], feed_dict={
+        #             self._validset.targets: targets,
+        #             self._model.gembedding_new: gembedding_new
+        #         })
 
-                valid_time += time.time() - start_time
-                valid_loss += loss
-                n_valid_sents += len(targets)
-                n_valid_correct += n_correct
-                n_valid_tokens += n_tokens
-                self.model.sanity_check(inputs, targets, predictions, self._vocabs, f, feed_dict={
-                        self._validset.inputs: inputs,
-                        self._validset.targets: targets
-                    })
-            valid_loss /= k+1
-            valid_accuracy = 100 * n_valid_correct / n_valid_tokens
-            valid_time = n_valid_sents / valid_time
-            self.history['valid_loss'].append(valid_loss)
-            self.history['valid_accuracy'].append(valid_accuracy)
-          if print_every and total_train_iters % print_every == 0:
-            train_loss /= n_train_iters
-            train_time = n_train_sents / train_time
-            print('%6d) Train loss: %.4f    Train rate: %6.1f sents/sec\n\tValid loss: %.4f    Valid acc: %5.2f%%    Valid rate: %6.1f sents/sec' % (total_train_iters, train_loss, train_time, valid_loss, valid_accuracy, valid_time))
-            train_time = 0
-            train_loss = 0
-            n_train_sents = 0
-            n_train_iters = 0
-        sess.run(self._global_epoch.assign_add(1.))
-        if save_every and (total_train_iters % save_every == 0):
-          saver.save(sess, os.path.join(self.save_dir, self.name.lower() + '-trained'),
-                     latest_filename=self.name.lower(),
-                     global_step=self.global_epoch,
-                     write_meta_graph=False)
-          with open(os.path.join(self.save_dir, 'history.pkl'), 'w') as f:
-            pkl.dump(self.history, f)
-          self.test(sess, validate=True)
+        #         valid_time += time.time() - start_time
+        #         valid_loss += loss
+        #         n_valid_sents += len(targets)
+        #         n_valid_correct += n_correct
+        #         n_valid_tokens += n_tokens
+        #         self.model.sanity_check(inputs, targets, predictions, self._vocabs, f, feed_dict={
+        #                 self._validset.inputs: inputs,
+        #                 self._validset.targets: targets
+        #             })
+        #     valid_loss /= k+1
+        #     valid_accuracy = 100 * n_valid_correct / n_valid_tokens
+        #     valid_time = n_valid_sents / valid_time
+        #     self.history['valid_loss'].append(valid_loss)
+        #     self.history['valid_accuracy'].append(valid_accuracy)
+        #   if print_every and total_train_iters % print_every == 0:
+        #     train_loss /= n_train_iters
+        #     train_time = n_train_sents / train_time
+        #     print('%6d) Train loss: %.4f    Train rate: %6.1f sents/sec\n\tValid loss: %.4f    Valid acc: %5.2f%%    Valid rate: %6.1f sents/sec' % (total_train_iters, train_loss, train_time, valid_loss, valid_accuracy, valid_time))
+        #     train_time = 0
+        #     train_loss = 0
+        #     n_train_sents = 0
+        #     n_train_iters = 0
+        # sess.run(self._global_epoch.assign_add(1.))
+        # if save_every and (total_train_iters % save_every == 0):
+        #   saver.save(sess, os.path.join(self.save_dir, self.name.lower() + '-trained'),
+        #              latest_filename=self.name.lower(),
+        #              global_step=self.global_epoch,
+        #              write_meta_graph=False)
+        #   with open(os.path.join(self.save_dir, 'history.pkl'), 'w') as f:
+        #     pkl.dump(self.history, f)
+        #   self.test(sess, validate=True)
     except KeyboardInterrupt:
       try:
         raw_input('\nPress <Enter> to save or <Ctrl-C> to exit.')
       except:
         print('\r', end='')
         sys.exit(0)
-    saver.save(sess, os.path.join(self.save_dir, self.name.lower() + '-trained'),
-               latest_filename=self.name.lower(),
-               global_step=self.global_epoch,
-               write_meta_graph=False)
-    with open(os.path.join(self.save_dir, 'history.pkl'), 'w') as f:
-      pkl.dump(self.history, f)
-    with open(os.path.join(self.save_dir, 'scores.txt'), 'w') as f:
-      pass
-    self.test(sess, validate=True)
+    # saver.save(sess, os.path.join(self.save_dir, self.name.lower() + '-trained'),
+    #            latest_filename=self.name.lower(),
+    #            global_step=self.global_epoch,
+    #            write_meta_graph=False)
+    # with open(os.path.join(self.save_dir, 'history.pkl'), 'w') as f:
+    #   pkl.dump(self.history, f)
+    # with open(os.path.join(self.save_dir, 'scores.txt'), 'w') as f:
+    #   pass
+    # self.test(sess, validate=True)
     return
 
 
@@ -519,7 +534,9 @@ class Network(Configurable):
     optimizer2 = optimizers.RadamOptimizerMod(self._config, global_step=self.global_step)
     train_gemb_op = optimizer2.minimize(self._model.gemb_loss,
         var_list=[var for var in tf.global_variables() if 'gemb/gemb_fc' in var.op.name])
-    ops['train_gemb_op'] = [train_gemb_op, self._model.gemb_loss]
+    print("LOGITS:", self._model.logits)
+    print("LABELS:", self._model.labels)
+    ops['train_gemb_op'] = [self._model.logits, self._model.labels, train_gemb_op, self._model.gemb_loss]
 
     ops['get_gemb_op'] = [self._model.gembedding]
     

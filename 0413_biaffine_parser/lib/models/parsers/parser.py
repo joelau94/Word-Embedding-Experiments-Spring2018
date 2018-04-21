@@ -111,9 +111,7 @@ class Parser(BaseParser):
     dim2 = tf.shape(recur_states_1)[1]
     dim3 = tf.shape(recur_states_1)[2]
 
-    recur_states_1_reshaped = tf.reshape(recur_states_1,[dim1*dim2, dim3])
-    #recur_states_1_reshaped[self.oov_pos-1]
-    
+    recur_states_1_reshaped = tf.reshape(recur_states_1,[dim1*dim2, dim3])    
     ctx = tf.concat([tf.split(recur_states_1_reshaped[self.oov_pos-1], num_or_size_splits = 2, axis=-1)[0],
                     tf.split(recur_states_1_reshaped[self.oov_pos+1], num_or_size_splits = 2, axis=-1)[0]],
                     axis=-1)
@@ -126,15 +124,10 @@ class Parser(BaseParser):
             scope='gemb_fc')
 
     # for testing
+    self.logits = tf.transpose(tf.squeeze(feat))
+    self.labels = tf.one_hot(self.inputs[self.oov_pos,:,0], len(self.vocabs[0]._str2idx))
     self.gemb_scores = tf.nn.softmax(feat)
     self.gembedding = tf.reduce_sum(tf.expand_dims(self.gemb_scores, axis=-1) * embed_mat, axis=-2)
-
-    # for training
-    # print(tf.shape(feat)) # (3,)
-    # print(feat.get_shape()) # (?, ?, 21679)
-    # print(tf.shape(tf.squeeze(feat)))
-    # print(feat.get_shape())
-    # print(tf.shape(tf.one_hot(self.inputs[self.oov_pos,:,0], len(self.vocabs[0]._str2idx))))
     self.gemb_loss = tf.nn.softmax_cross_entropy_with_logits(logits = tf.transpose(tf.squeeze(feat)), labels = tf.one_hot(self.inputs[self.oov_pos,:,0], len(self.vocabs[0]._str2idx)))
 
   def insert_gemb_graph(self):
