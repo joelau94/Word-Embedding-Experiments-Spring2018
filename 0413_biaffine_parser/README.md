@@ -1,22 +1,8 @@
-# Modifications for GEmb
+# Parser (v180413)
+Last modified April 25. Bug-free on toy data.
 
-+ Computation graph modifications: ```lib/models/parsers/parser.py```
-+ Training and Testing procedure: ```network.py```
-+ Data loading and formatting: ```dataset.py```
+Now Freezed. Development continues on v180425.
 
-### Run
-
-Add ```--train-gemb``` or ```--test-gemb``` to arguments.
-
-
-----------------------------------
-This repository hosts the code in the paper [Deep Biaffine Attention for Neural Dependency Parsing](https://arxiv.org/abs/1611.01734). It has been modified to work with the latest tensorflow version. 
-
-Prior to running the code, create the saves folder that stores the model that is created during training. Also, store your conll files and embedding file in the data folder. 
-
------------------------------------
-# Parser
-This repository contains the code used to train the parsers described in the paper [Deep Biaffine Attention for Neural Dependency Parsing](https://arxiv.org/abs/1611.01734). Here we describe how the source code is structured and how to train/validate/test models.
 
 ## Where are the files you care about?
 * `lib/linalg.py`: This file contains general-purpose functions that don't require any knowledge of hyperparameters. For example, the `linear` and `bilinear` functions, which simply return the result of applying an affine or biaffine transformation to the input.

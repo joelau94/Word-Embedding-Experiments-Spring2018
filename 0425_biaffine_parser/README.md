@@ -1,13 +1,14 @@
 # Parser (v180425)
 
 Bug-free on toy data. (as of 04/20/2018)
+
 Toy data attached for easy run.
 
 ### Entry Points
 
-Training parser model: ```./train.sh```
-Training GEMB: ```./train_gemb.sh```
-Prediction: ```./test_gemb.sh```
++ Training parser model: ```./train.sh```
++ Training GEMB: ```./train_gemb.sh```
++ Prediction: ```./test_gemb.sh```
 
 
 ## Where are the files you care about?
