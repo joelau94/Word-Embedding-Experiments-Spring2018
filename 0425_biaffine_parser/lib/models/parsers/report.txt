@@ -1,0 +1,16 @@
+--------------------------------------------------------------------------------
+Processing file 'shallow_parser.py'
+ outputting to 'shallow_parser.py'
+--------------------------------------------------------------------------------
+
+'shallow_parser.py' Line 67
+--------------------------------------------------------------------------------
+
+Renamed function 'tf.pack' to 'tf.stack'
+
+    Old:     output['predictions'] = tf.pack([arc_output['predictions'],
+                                     ~~~~~~~                             
+    New:     output['predictions'] = tf.stack([arc_output['predictions'],
+                                     ~~~~~~~~                             
+
+
