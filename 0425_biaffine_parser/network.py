@@ -38,7 +38,8 @@ from dataset import Dataset
 
 def replace_with_gemb(word_inputs, gembedding, oov_pos):
   word_inputs_new = np.copy(word_inputs)
-  for i, oov in enumerate(gembedding):
+  for i in oov_pos:
+    oov = gembedding[i]
     word_inputs_new[0, i, :] = oov
   return word_inputs_new
 
@@ -398,11 +399,13 @@ class Network(Configurable):
         })
       all_predictions[-1].extend(self.model.validate(mb_inputs, mb_targets, mb_probs))
       all_sents[-1].extend(sents)
+      
       if len(all_predictions[-1]) == len(dataset[bkt_idx]):
         bkt_idx += 1
         if bkt_idx < len(dataset._metabucket):
           all_predictions.append([])
           all_sents.append([])
+    
     with open(os.path.join(self.save_dir, os.path.basename(filename)), 'w') as f:
       for bkt_idx, idx in dataset._metabucket.data:
         data = dataset._metabucket[bkt_idx].data[idx][1:]
