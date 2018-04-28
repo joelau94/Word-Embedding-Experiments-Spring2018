@@ -632,7 +632,9 @@ if __name__ == '__main__':
   #print([v.name for v in network.save_vars])
   config_proto = tf.ConfigProto()
   config_proto.gpu_options.per_process_gpu_memory_fraction = network.per_process_gpu_memory_fraction
-  with tf.Session(config=config_proto) as sess:
+  
+  with tf.Session(config=config_proto) as sess, tf.device('/gpu:1') as _:
+    
     sess.run(tf.global_variables_initializer())
     if not (args.test or args.test_gemb or args.matrix):
       if args.load:
