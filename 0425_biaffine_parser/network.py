@@ -38,9 +38,12 @@ from dataset import Dataset
 
 def replace_with_gemb(word_inputs, gembedding, oov_pos):
   word_inputs_new = np.copy(word_inputs)
-  for i in oov_pos:
-    oov = gembedding[i]
+  print(len(gembedding))
+  print(oov_pos)
+  for i, oov in zip(oov_pos, gembedding):
     word_inputs_new[0, i, :] = oov
+  # for i, oov in enumerate(gembedding):
+  #   word_inputs_new[0, i, :] = oov
   return word_inputs_new
 
 #***************************************************************
