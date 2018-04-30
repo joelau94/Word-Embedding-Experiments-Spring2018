@@ -70,7 +70,7 @@ class TaggerData(object):
     """
     unk_id = self.word_dict.unknown_id
     self.gemb_train_sents = [s for s in self.train_sents
-        if len(s[0]) <= self.max_train_length and unk_id not in s]
+        if len(s[0]) <= self.max_train_length and unk_id not in s[0]] # s[0] are tokens
     self.gemb_train_tensors = [tensorize_with_rand_oov(s, self.max_train_length) for s in self.gemb_train_sents]
     train_ids = range(len(self.gemb_train_sents))
     random.shuffle(train_ids)
