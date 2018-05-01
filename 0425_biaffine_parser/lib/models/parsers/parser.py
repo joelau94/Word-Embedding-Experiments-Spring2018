@@ -129,7 +129,8 @@ class Parser(BaseParser):
                                             num_or_size_splits=3,
                                             axis=-1)[0]),
                           len(self.vocabs[0]._str2idx))
-    graph['gemb_loss'] = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+    losses = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+    graph['gemb_loss'] = tf.reduce_mean(losses)
 
 
   def add_get_gemb_graph(self, graph):
