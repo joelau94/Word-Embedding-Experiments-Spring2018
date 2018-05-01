@@ -632,46 +632,44 @@ if __name__ == '__main__':
   #print([v.name for v in network.save_vars])
   config_proto = tf.ConfigProto()
   config_proto.gpu_options.per_process_gpu_memory_fraction = network.per_process_gpu_memory_fraction
-  
-  for d in ['/device:GPU:0', '/device:GPU:1']:
-    with tf.device(d):
-      with tf.Session(config=config_proto) as sess:
-        sess.run(tf.global_variables_initializer())
-        if not (args.test or args.test_gemb or args.matrix):
-          if args.load:
-            saver = tf.train.Saver(var_list=network.save_vars)
-            saver.restore(sess, tf.train.latest_checkpoint(network.save_dir, latest_filename=network.name.lower()))
-            if os.path.isfile(os.path.join(network.save_dir, 'history.pkl')):
-              with open(os.path.join(network.save_dir, 'history.pkl')) as f:
-                network.history = pkl.load(f)
-          if args.train_gemb:
-            network.train_gemb(sess)
-          else:
-            network.train(sess)
-        elif args.matrix:
-          saver = tf.train.Saver(var_list=network.save_vars)
-          saver.restore(sess, tf.train.latest_checkpoint(network.save_dir, latest_filename=network.name.lower()))
-          # TODO make this save pcolor plots of all matrices to a directory in save_dir
-          #with tf.variable_scope('RNN0/BiRNN_FW/LSTMCell/Linear', reuse=True):
-          #  pkl.dump(sess.run(tf.get_variable('Weights')), open('mat0.pkl', 'w'))
-          #with tf.variable_scope('RNN1/BiRNN_FW/LSTMCell/Linear', reuse=True):
-          #  pkl.dump(sess.run(tf.get_variable('Weights')), open('mat1.pkl', 'w'))
-          #with tf.variable_scope('RNN2/BiRNN_FW/LSTMCell/Linear', reuse=True):
-          #  pkl.dump(sess.run(tf.get_variable('Weights')), open('mat2.pkl', 'w'))
-          #with tf.variable_scope('MLP/Linear', reuse=True):
-          #  pkl.dump(sess.run(tf.get_variable('Weights')), open('mat3.pkl', 'w'))
-          network.savefigs(sess)
-        else:
-          # os.system('echo Testing: >> %s/HEAD' % network.save_dir)
-          # os.system('git rev-parse HEAD >> %s/HEAD' % network.save_dir)
-          saver = tf.train.Saver(var_list=network.save_vars)
-          saver.restore(sess, tf.train.latest_checkpoint(network.save_dir, latest_filename=network.name.lower()))
-          if args.test_gemb:
-            network.test_with_gemb(sess, validate=True)
-            start_time = time.time()
-            network.test_with_gemb(sess, validate=False)
-          else:
-            network.test(sess, validate=True)
-            start_time = time.time()
-            network.test(sess, validate=False)
-          print('Parsing took %f seconds' % (time.time() - start_time))
+
+  with tf.Session(config=config_proto) as sess, tf.device('/gpu:1') as _:
+    sess.run(tf.global_variables_initializer())
+    if not (args.test or args.test_gemb or args.matrix):
+      if args.load:
+        saver = tf.train.Saver(var_list=network.save_vars)
+        saver.restore(sess, tf.train.latest_checkpoint(network.save_dir, latest_filename=network.name.lower()))
+        if os.path.isfile(os.path.join(network.save_dir, 'history.pkl')):
+          with open(os.path.join(network.save_dir, 'history.pkl')) as f:
+            network.history = pkl.load(f)
+      if args.train_gemb:
+        network.train_gemb(sess)
+      else:
+        network.train(sess)
+    elif args.matrix:
+      saver = tf.train.Saver(var_list=network.save_vars)
+      saver.restore(sess, tf.train.latest_checkpoint(network.save_dir, latest_filename=network.name.lower()))
+      # TODO make this save pcolor plots of all matrices to a directory in save_dir
+      #with tf.variable_scope('RNN0/BiRNN_FW/LSTMCell/Linear', reuse=True):
+      #  pkl.dump(sess.run(tf.get_variable('Weights')), open('mat0.pkl', 'w'))
+      #with tf.variable_scope('RNN1/BiRNN_FW/LSTMCell/Linear', reuse=True):
+      #  pkl.dump(sess.run(tf.get_variable('Weights')), open('mat1.pkl', 'w'))
+      #with tf.variable_scope('RNN2/BiRNN_FW/LSTMCell/Linear', reuse=True):
+      #  pkl.dump(sess.run(tf.get_variable('Weights')), open('mat2.pkl', 'w'))
+      #with tf.variable_scope('MLP/Linear', reuse=True):
+      #  pkl.dump(sess.run(tf.get_variable('Weights')), open('mat3.pkl', 'w'))
+      network.savefigs(sess)
+    else:
+      # os.system('echo Testing: >> %s/HEAD' % network.save_dir)
+      # os.system('git rev-parse HEAD >> %s/HEAD' % network.save_dir)
+      saver = tf.train.Saver(var_list=network.save_vars)
+      saver.restore(sess, tf.train.latest_checkpoint(network.save_dir, latest_filename=network.name.lower()))
+      if args.test_gemb:
+        network.test_with_gemb(sess, validate=True)
+        start_time = time.time()
+        network.test_with_gemb(sess, validate=False)
+      else:
+        network.test(sess, validate=True)
+        start_time = time.time()
+        network.test(sess, validate=False)
+      print('Parsing took %f seconds' % (time.time() - start_time))
