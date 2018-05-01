@@ -631,8 +631,8 @@ if __name__ == '__main__':
   os.system('echo Model: %s > %s/MODEL' % (network.model.__class__.__name__, network.save_dir))
   #print([v.name for v in network.save_vars])
   #config_proto.gpu_options.per_process_gpu_memory_fraction = network.per_process_gpu_memory_fraction
-  config = tf.ConfigProto(log_device_placement=True)
-  config.gpu_options.per_process_gpu_memory_fraction=0.3 # don't hog all vRAM
+  config_proto = tf.ConfigProto(log_device_placement=True)
+  config_proto.gpu_options.per_process_gpu_memory_fraction=0.3 # don't hog all vRAM
   with tf.Session(config=config_proto) as sess, tf.device('/gpu:1') as _:
     sess.run(tf.global_variables_initializer())
     if not (args.test or args.test_gemb or args.matrix):
