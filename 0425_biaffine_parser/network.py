@@ -637,10 +637,13 @@ if __name__ == '__main__':
     sess.run(tf.global_variables_initializer())
     if not (args.test or args.test_gemb or args.matrix):
       if args.load:
+        load_path = 'saves/preload_train_gemb'
+        print("LOADING MODEL FROM:", load_path)
+        
         saver = tf.train.Saver(var_list=network.save_vars)
-        saver.restore(sess, tf.train.latest_checkpoint(network.save_dir, latest_filename=network.name.lower()))
-        if os.path.isfile(os.path.join(network.save_dir, 'history.pkl')):
-          with open(os.path.join(network.save_dir, 'history.pkl')) as f:
+        saver.restore(sess, tf.train.latest_checkpoint(load_path, latest_filename=network.name.lower()))
+        if os.path.isfile(os.path.join(load_path, 'history.pkl')):
+          with open(os.path.join(load_path, 'history.pkl')) as f:
             network.history = pkl.load(f)
       if args.train_gemb:
         network.train_gemb(sess)
