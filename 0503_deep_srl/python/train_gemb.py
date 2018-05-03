@@ -1,0 +1,412 @@
+from neural_srl.shared import *
+from neural_srl.shared.tagger_data import TaggerData
+from neural_srl.shared.tagger_data import char_batch_input
+from neural_srl.shared.measurements import Timer
+from neural_srl.theano.tagger import BiLSTMTaggerModel
+from neural_srl.theano.gemb import replace_with_gemb
+from neural_srl.shared.evaluation import PropIdEvaluator, SRLEvaluator, TaggerEvaluator
+from neural_srl.theano.util import floatX
+
+import argparse
+import time
+import numpy
+import os
+import shutil
+import sys
+import theano
+import cPickle as pkl
+
+
+def evaluate_tagger_ctx(model, ctx_emb_function, gemb_eval_function, batched_dev_data, evaluator, writer, global_step):
+  predictions = None
+  dev_loss = 0
+  for i, batched_tensor in enumerate(batched_dev_data):
+    x, y, oov_pos, _, weights = batched_tensor # weights is mask
+    oov_pos = oov_pos[0] # batch size must be 1
+    gembedding, inputs_0 = ctx_emb_function(x, weights, oov_pos)
+    inputs_0_new = replace_with_gemb(inputs_0, gembedding, oov_pos)
+
+    p, loss = gemb_eval_function(inputs_0_new, weights, y)
+    predictions = numpy.concatenate((predictions, p), axis=0) if i > 0 else p
+    dev_loss += loss
+
+  print ('Dev loss={:.6f}'.format(dev_loss))
+  evaluator.evaluate(predictions)
+  writer.write('{}\t{}\t{:.6f}\t{:.2f}\t{:.2f}\n'.format(global_step,
+                                                         time.strftime("%Y-%m-%d %H:%M:%S"),
+                                                         dev_loss, 
+                                                         evaluator.accuracy,
+                                                         evaluator.best_accuracy))
+  writer.flush()
+  if evaluator.has_best:
+    model.gemb.save(os.path.join(args.gemb_model, 'gemb_model'))
+
+def evaluate_tagger_mix(model, mix_emb_function, gemb_eval_function, batched_dev_data, evaluator, writer, global_step):
+  predictions = None
+  dev_loss = 0
+  for i, batched_tensor in enumerate(batched_dev_data):
+    x, y, oov_pos, oov_char, rnn_mask, _, weights = batched_tensor # weights is mask
+    oov_pos = oov_pos[0] # batch size must be 1
+    gembedding, inputs_0 = mix_emb_function(x, weights, oov_pos, oov_char, rnn_mask)
+    inputs_0_new = replace_with_gemb(inputs_0, gembedding, oov_pos)
+
+    p, loss = gemb_eval_function(inputs_0_new, weights, y)
+    predictions = numpy.concatenate((predictions, p), axis=0) if i > 0 else p
+    dev_loss += loss
+
+  print ('Dev loss={:.6f}'.format(dev_loss))
+  evaluator.evaluate(predictions)
+  writer.write('{}\t{}\t{:.6f}\t{:.2f}\t{:.2f}\n'.format(global_step,
+                                                         time.strftime("%Y-%m-%d %H:%M:%S"),
+                                                         dev_loss, 
+                                                         evaluator.accuracy,
+                                                         evaluator.best_accuracy))
+  writer.flush()
+  if evaluator.has_best:
+    model.gemb.save(os.path.join(args.gemb_model, 'gemb_model'))
+
+def evaluate_tagger_char(model, mix_emb_function, gemb_eval_function, batched_dev_data, evaluator, writer, global_step):
+  predictions = None
+  dev_loss = 0
+  for i, batched_tensor in enumerate(batched_dev_data):
+    x, y, oov_pos, oov_char, rnn_mask, _, weights = batched_tensor # weights is mask
+    oov_pos = oov_pos[0] # batch size must be 1
+    gembedding, inputs_0 = char_emb_function(x, weights, oov_char, rnn_mask)
+    inputs_0_new = replace_with_gemb(inputs_0, gembedding, oov_pos)
+
+    p, loss = gemb_eval_function(inputs_0_new, weights, y)
+    predictions = numpy.concatenate((predictions, p), axis=0) if i > 0 else p
+    dev_loss += loss
+
+  print ('Dev loss={:.6f}'.format(dev_loss))
+  evaluator.evaluate(predictions)
+  writer.write('{}\t{}\t{:.6f}\t{:.2f}\t{:.2f}\n'.format(global_step,
+                                                         time.strftime("%Y-%m-%d %H:%M:%S"),
+                                                         dev_loss, 
+                                                         evaluator.accuracy,
+                                                         evaluator.best_accuracy))
+  writer.flush()
+  if evaluator.has_best:
+    model.gemb.save(os.path.join(args.gemb_model, 'gemb_model'))
+
+
+def train_ctx_gemb(args):
+  config = configuration.get_config(args.config)
+  i = 0
+  global_step = 0
+  epoch = 0
+  train_loss = 0.0
+  
+  with Timer('Data loading'):
+    vocab_path = args.vocab if args.vocab != '' else None
+    label_path = args.labels if args.labels != '' else None
+    gold_props_path = args.gold if args.gold != '' else None
+
+    print ('Task: {}'.format(args.task))
+    if args.task == 'srl':
+      # Data and evaluator for SRL.
+      data = TaggerData(config,
+                        *reader.get_srl_data(config, args.train, args.dev, vocab_path, label_path))
+      evaluator = SRLEvaluator(data.get_development_data(), # data for eval script
+                               data.label_dict,
+                               gold_props_file=gold_props_path,
+                               use_se_marker=config.use_se_marker,
+                               pred_props_file=None,
+                               word_dict=data.word_dict)
+    else:
+      # Data and evaluator for PropId.
+      data = TaggerData(config,
+                        *reader.get_postag_data(config, args.train, args.dev, vocab_path, label_path))
+      evaluator = PropIdEvaluator(data.get_development_data(),
+                                  data.label_dict)
+
+    batched_dev_data = data.get_ctx_gemb_development_data(batch_size=config.dev_batch_size) # data for NN
+    print ('Dev data has {} batches.'.format(len(batched_dev_data)))
+  
+  with Timer('Preparation'):
+    if not os.path.isdir(args.model):
+      print ('Directory {} does not exist. Creating new.'.format(args.model))
+      os.makedirs(args.model)
+    else:
+      if len(os.listdir(args.model)) > 0:
+        print ('[WARNING] Log directory {} is not empty, previous checkpoints might be overwritten'
+             .format(args.model))
+    shutil.copyfile(args.config, os.path.join(args.model, 'config'))
+    # Save word and label dict to model directory.
+    data.word_dict.save(os.path.join(args.model, 'word_dict'))
+    data.label_dict.save(os.path.join(args.model, 'label_dict'))
+    writer = open(os.path.join(args.model, 'gemb_checkpoints.tsv'), 'w')
+    writer.write('step\tdatetime\tdev_loss\tdev_accuracy\tbest_dev_accuracy\n')
+
+  with Timer('Building model'):
+    model = BiLSTMTaggerModel(data, config=config)
+    model.load(os.path.join(args.model, 'model.npz'))
+    model.add_ctx_gemb() 
+    for param in model.gemb.params:
+      print param, param.name, param.shape.eval()
+    gemb_loss_function = model.get_ctx_gemb_loss_function()
+    gemb_eval_function = model.get_eval_with_gemb_function()
+    ctx_emb_function = model.get_ctx_emb_function()
+  
+  while epoch < config.max_epochs:
+    with Timer("Epoch%d" % epoch) as timer:
+      train_data = data.get_ctx_gemb_training_data(include_last_batch=True)
+      for batched_tensor in train_data:
+        x, y, oov_pos, _, weights = batched_tensor
+        loss = gemb_loss_function(x, weights, oov_pos)
+        train_loss += loss
+        i += 1
+        global_step += 1
+        if i % 400 == 0:
+          timer.tick("{} training steps, loss={:.3f}".format(i, train_loss / i))
+        
+    train_loss = train_loss / i
+    print("Epoch {}, steps={}, loss={:.3f}".format(epoch, i, train_loss))
+    i = 0
+    epoch += 1
+    train_loss = 0.0
+    if epoch % config.checkpoint_every_x_epochs == 0:
+      with Timer('Evaluation'):
+        evaluate_tagger_ctx(model, ctx_emb_function, gemb_eval_function, batched_dev_data, evaluator, writer, global_step)
+
+  # Done. :)
+  writer.close()
+
+
+def train_mix_gemb(args):
+  config = configuration.get_config(args.config)
+  i = 0
+  global_step = 0
+  epoch = 0
+  train_loss = 0.0
+  
+  with Timer('Data loading'):
+    vocab_path = args.vocab if args.vocab != '' else None
+    label_path = args.labels if args.labels != '' else None
+    gold_props_path = args.gold if args.gold != '' else None
+
+    print ('Task: {}'.format(args.task))
+    if args.task == 'srl':
+      # Data and evaluator for SRL.
+      data = TaggerData(config,
+                        *reader.get_srl_data(config, args.train, args.dev, vocab_path, label_path, with_raw=True))
+      data.init_char()
+      data.save_char(args.model)
+      evaluator = SRLEvaluator(data.get_development_data(), # data for eval script
+                               data.label_dict,
+                               gold_props_file=gold_props_path,
+                               use_se_marker=config.use_se_marker,
+                               pred_props_file=None,
+                               word_dict=data.word_dict)
+    else:
+      # Data and evaluator for PropId.
+      data = TaggerData(config,
+                        *reader.get_postag_data(config, args.train, args.dev, vocab_path, label_path))
+      evaluator = PropIdEvaluator(data.get_development_data(),
+                                  data.label_dict)
+
+    batched_dev_data = data.get_mix_gemb_development_data(batch_size=config.dev_batch_size) # data for NN
+    print ('Dev data has {} batches.'.format(len(batched_dev_data)))
+  
+  with Timer('Preparation'):
+    if not os.path.isdir(args.model):
+      print ('Directory {} does not exist. Creating new.'.format(args.model))
+      os.makedirs(args.model)
+    else:
+      if len(os.listdir(args.model)) > 0:
+        print ('[WARNING] Log directory {} is not empty, previous checkpoints might be overwritten'
+             .format(args.model))
+    shutil.copyfile(args.config, os.path.join(args.model, 'config'))
+    # Save word and label dict to model directory.
+    data.word_dict.save(os.path.join(args.model, 'word_dict'))
+    data.label_dict.save(os.path.join(args.model, 'label_dict'))
+    writer = open(os.path.join(args.model, 'gemb_checkpoints.tsv'), 'w')
+    writer.write('step\tdatetime\tdev_loss\tdev_accuracy\tbest_dev_accuracy\n')
+
+  with Timer('Building model'):
+    model = BiLSTMTaggerModel(data, config=config)
+    model.load(os.path.join(args.model, 'model.npz'))
+    model.add_mix_gemb(len(data.c2i), int(config.char_emb_dim), int(config.char_rnn_dim))
+    for param in model.gemb.params:
+      print param, param.name, param.shape.eval()
+    gemb_loss_function = model.get_mix_gemb_loss_function()
+    gemb_eval_function = model.get_eval_with_gemb_function()
+    mix_emb_function = model.get_mix_emb_function()
+
+  while epoch < config.max_epochs:
+    with Timer("Epoch%d" % epoch) as timer:
+      train_data = data.get_mix_gemb_training_data(include_last_batch=True)
+      for batched_tensor in train_data:
+        x, y, oov_pos, oov_char, _, weights = batched_tensor # weights is mask of sentence rnn
+        oov_char, rnn_mask = char_batch_input(oov_char)
+        loss = gemb_loss_function(x, weights, oov_pos, oov_char, rnn_mask)
+        train_loss += loss
+        i += 1
+        global_step += 1
+        if i % 400 == 0:
+          timer.tick("{} training steps, loss={:.3f}".format(i, train_loss / i))
+        
+    train_loss = train_loss / i
+    print("Epoch {}, steps={}, loss={:.3f}".format(epoch, i, train_loss))
+    i = 0
+    epoch += 1
+    train_loss = 0.0
+    if epoch % config.checkpoint_every_x_epochs == 0:
+      with Timer('Evaluation'):
+        evaluate_tagger_mix(model, mix_emb_function, gemb_eval_function, batched_dev_data, evaluator, writer, global_step)
+
+  writer.close()
+
+
+def train_char_gemb(args):
+  # use the same data format as Mix
+  config = configuration.get_config(args.config)
+  i = 0
+  global_step = 0
+  epoch = 0
+  train_loss = 0.0
+
+  with Timer('Data loading'):
+    vocab_path = args.vocab if args.vocab != '' else None
+    label_path = args.labels if args.labels != '' else None
+    gold_props_path = args.gold if args.gold != '' else None
+
+    print ('Task: {}'.format(args.task))
+    if args.task == 'srl':
+      # Data and evaluator for SRL.
+      data = TaggerData(config,
+                        *reader.get_srl_data(config, args.train, args.dev, vocab_path, label_path, with_raw=True))
+      data.init_char()
+      data.save_char(args.model)
+      evaluator = SRLEvaluator(data.get_development_data(), # data for eval script
+                               data.label_dict,
+                               gold_props_file=gold_props_path,
+                               use_se_marker=config.use_se_marker,
+                               pred_props_file=None,
+                               word_dict=data.word_dict)
+    else:
+      # Data and evaluator for PropId.
+      data = TaggerData(config,
+                        *reader.get_postag_data(config, args.train, args.dev, vocab_path, label_path))
+      evaluator = PropIdEvaluator(data.get_development_data(),
+                                  data.label_dict)
+
+    batched_dev_data = data.get_mix_gemb_development_data(batch_size=config.dev_batch_size) # data for NN
+    print ('Dev data has {} batches.'.format(len(batched_dev_data)))
+  
+  with Timer('Preparation'):
+    if not os.path.isdir(args.model):
+      print ('Directory {} does not exist. Creating new.'.format(args.model))
+      os.makedirs(args.model)
+    else:
+      if len(os.listdir(args.model)) > 0:
+        print ('[WARNING] Log directory {} is not empty, previous checkpoints might be overwritten'
+             .format(args.model))
+    shutil.copyfile(args.config, os.path.join(args.model, 'config'))
+    # Save word and label dict to model directory.
+    data.word_dict.save(os.path.join(args.model, 'word_dict'))
+    data.label_dict.save(os.path.join(args.model, 'label_dict'))
+    writer = open(os.path.join(args.model, 'gemb_checkpoints.tsv'), 'w')
+    writer.write('step\tdatetime\tdev_loss\tdev_accuracy\tbest_dev_accuracy\n')
+
+  with Timer('Building model'):
+    model = BiLSTMTaggerModel(data, config=config)
+    model.load(os.path.join(args.model, 'model.npz'))
+    model.add_char_gemb(len(data.c2i), int(config.char_emb_dim), int(config.char_rnn_dim))
+    for param in model.gemb.params:
+      print param, param.name, param.shape.eval()
+    gemb_loss_function = model.get_char_gemb_loss_function()
+    gemb_eval_function = model.get_eval_with_gemb_function()
+    char_emb_function = model.get_char_emb_function()
+
+  while epoch < config.max_epochs:
+    with Timer("Epoch%d" % epoch) as timer:
+      train_data = data.get_mix_gemb_training_data(include_last_batch=True)
+      for batched_tensor in train_data:
+        x, y, oov_pos, oov_char, _, weights = batched_tensor # weights is mask of sentence rnn
+        oov_char, rnn_mask = char_batch_input(oov_char)
+        loss = gemb_loss_function(x, weights, oov_pos, oov_char, rnn_mask)
+        train_loss += loss
+        i += 1
+        global_step += 1
+        if i % 400 == 0:
+          timer.tick("{} training steps, loss={:.3f}".format(i, train_loss / i))
+        
+    train_loss = train_loss / i
+    print("Epoch {}, steps={}, loss={:.3f}".format(epoch, i, train_loss))
+    i = 0
+    epoch += 1
+    train_loss = 0.0
+    if epoch % config.checkpoint_every_x_epochs == 0:
+      with Timer('Evaluation'):
+        evaluate_tagger_char(model, char_emb_function, gemb_eval_function, batched_dev_data, evaluator, writer, global_step)
+
+  writer.close()
+
+
+if __name__ == "__main__": 
+  parser = argparse.ArgumentParser(description=__doc__)
+  parser.add_argument('--config',
+                      type=str,
+                      default='',
+                      required=True,
+                      help='Config file for the neural architecture and hyper-parameters.')
+
+  parser.add_argument('--model',
+                      type=str,
+                      default='',
+                      required=True,
+                      help='Path to the directory for saving model and checkpoints.')
+
+  parser.add_argument('--gemb-model',
+                      type=str,
+                      default='',
+                      required=True,
+                      help='Path to the directory for saving GEMB model and checkpoints.')
+
+  parser.add_argument('--gemb-type',
+                      type=str,
+                      default='context',
+                      required=True, 
+                      choices=['context', 'char', 'mix'])
+
+  parser.add_argument('--train',
+                      type=str,
+                      default='',
+                      required=True,
+                      help='Path to the training data, which is a single file in sequential tagging format.')
+
+  parser.add_argument('--dev',
+                      type=str,
+                      default='',
+                      required=True,
+                      help='Path to the devevelopment data, which is a single file in the sequential tagging format.')
+
+  parser.add_argument('--task',
+                      type=str,
+                      help='Training task (srl or propid). Default is srl.',
+                      default='srl',
+                      choices=['srl', 'propid'])
+
+  parser.add_argument('--gold',
+                      type=str,
+                      default='',
+                      help='(Optional) Path to the file containing gold propositions (provided by CoNLL shared task).')
+
+  parser.add_argument('--vocab',
+                      type=str,
+                      default='',
+                      help='(Optional) A file containing the pre-defined vocabulary mapping. Each line contains a text string for the word mapped to the current line number.')
+
+  parser.add_argument('--labels',
+                      type=str,
+                      default='',
+                      help='(Optional) A file containing the pre-defined label mapping. Each line contains a text string for the label mapped to the current line number.')
+
+  args = parser.parse_args()
+  if args.gemb_type == 'context':
+    train_ctx_gemb(args)
+  elif args.gemb_type == 'char':
+    train_char_gemb(args)
+  elif args.gemb_type == 'mix':
+    train_mix_gemb(args)
