@@ -19,7 +19,7 @@ def char_batch_input(words):
 
   max_word_len = max(map(len, words))
   rnn_mask = np.array([[1.]*len(w) + [0.]*(max_word_len-len(w)) for w in words])
-  oov_char = np.array([w + [0.]*(max_word_len-len(w)) for w in words])
+  oov_char = np.array([w + [0]*(max_word_len-len(w)) for w in words])
 
   return oov_char, rnn_mask
 
@@ -95,8 +95,8 @@ class TaggerData(object):
 
     if raw_sents is not None:
       raw_train_sents, raw_dev_sents = raw_sents
-      self.raw_train_sents = [map(str.lower, s) for s in raw_train_sents if len(s[0]) <= self.max_train_length]
-      self.raw_dev_sents = [map(str.lower, s) for s in raw_dev_sents]
+      self.raw_train_sents = [s for s in raw_train_sents if len(s) <= self.max_train_length]
+      self.raw_dev_sents = raw_dev_sents
       # self.raw_train_sents: list[list[str]]
 
     self.word_dict = word_dict
@@ -111,7 +111,7 @@ class TaggerData(object):
 
   def init_char(self):
     self.w2i = self.word_dict.str2idx
-    words = [w for i, w in enumerate(self.word_dict.idx2str) if i != self.unk_id]
+    words = [w.lower() for i, w in enumerate(self.word_dict.idx2str) if i != self.unk_id]
     self.i2c = [' '] + list(set(''.join(words)))
     self.c2i = defaultdict(int)
     for i, c in enumerate(self.i2c):

@@ -172,8 +172,8 @@ def get_srl_data(config, train_data_path, dev_data_path, vocab_path=None, label_
   dev_labels = [string_sequence_to_ids(sent[2], label_dict) for sent in raw_dev_sents]
 
   # Get raw token
-  raw_train_tokens = [sent[0] for sent in raw_train_sents]
-  raw_dev_tokens = [sent[0] for sent in raw_dev_sents]
+  raw_train_tokens = [map(str.lower, sent[0]) for sent in raw_train_sents]
+  raw_dev_tokens = [map(str.lower, sent[0]) for sent in raw_dev_sents]
   
   # Get features
   print 'Extracting features'
