@@ -14,11 +14,21 @@ def char_batch_input(words):
   :return oov_char: padded oov_char array
   :return rnn_mask: oov word char rnn mask
   '''
+  if len(words) == 0:
+    return np.array([[]]), np.array([[]])
+
   max_word_len = max(map(len, words))
   rnn_mask = np.array([[1.]*len(w) + [0.]*(max_word_len-len(w)) for w in words])
   oov_char = np.array([w + [0.]*(max_word_len-len(w)) for w in words])
 
   return oov_char, rnn_mask
+
+def _process_x_y_weights(length, x, y):
+  weights = np.resize((y >= 0).astype(float), (length))
+  x = np.resize(x, (length, x.shape[1]))
+  y = np.resize(y, (length))
+
+  return x, y, weights
 
 def tensorize(sentence, max_length):
   """ Input:
@@ -31,30 +41,21 @@ def tensorize(sentence, max_length):
   """
   x = np.array([t for t in zip(*sentence[:-1])])
   y = np.array(sentence[-1])
-  weights = (y >= 0).astype(float)
-  x.resize([max_length, x.shape[1]])
-  y.resize([max_length])
-  weights.resize([max_length])
+  x, y, weights = _process_x_y_weights(max_length, x, y)
   return x, np.absolute(y), len(sentence[0]), weights
 
 def tensorize_with_rand_oov(sentence, max_length):
   x = np.array([t for t in zip(*sentence[:-1])])
   y = np.array(sentence[-1])
   oov_pos = np.random.randint(1, len(sentence[-1])-1)
-  weights = (y >= 0).astype(float)
-  x.resize([max_length, x.shape[1]])
-  y.resize([max_length])
-  weights.resize([max_length])
+  x, y, weights = _process_x_y_weights(max_length, x, y)
   return x, np.absolute(y), oov_pos, len(sentence[0]), weights
 
 def tensorize_with_oov(sentence, unk_id, max_length):
   x = np.array([t for t in zip(*sentence[:-1])])
   y = np.array(sentence[-1])
   oov_pos = np.array([i for i, idx in enumerate(sentence[0]) if idx == unk_id])
-  weights = (y >= 0).astype(float)
-  x.resize([max_length, x.shape[1]])
-  y.resize([max_length])
-  weights.resize([max_length])
+  x, y, weights = _process_x_y_weights(max_length, x, y)
   return x, np.absolute(y), oov_pos, len(sentence[0]), weights
 
 def tensorize_with_raw_rand_oov(sentence, raw_sent, max_length, c2i):
@@ -63,10 +64,7 @@ def tensorize_with_raw_rand_oov(sentence, raw_sent, max_length, c2i):
   oov_pos = np.random.randint(1, len(sentence[-1])-1)
   oov_char = [c2i[c] for c in raw_sent[oov_pos]]
 
-  weights = (y >= 0).astype(float)
-  x.resize([max_length, x.shape[1]])
-  y.resize([max_length])
-  weights.resize([max_length])
+  x, y, weights = _process_x_y_weights(max_length, x, y)
   return x, np.absolute(y), oov_pos, oov_char, len(sentence[0]), weights
 
 def tensorize_with_raw_oov(sentence, raw_sent, unk_id, max_length, c2i):
@@ -77,10 +75,7 @@ def tensorize_with_raw_oov(sentence, raw_sent, unk_id, max_length, c2i):
   oov_char = [[c2i[c] for c in raw_sent[i]] for i in oov_pos]
   oov_char, rnn_mask = char_batch_input(oov_char)
 
-  weights = (y >= 0).astype(float)
-  x.resize([max_length, x.shape[1]])
-  y.resize([max_length])
-  weights.resize([max_length])
+  x, y, weights = _process_x_y_weights(max_length, x, y)
   return x, np.absolute(y), oov_pos, oov_char, rnn_mask, len(sentence[0]), weights
   
 class TaggerData(object):
@@ -100,8 +95,8 @@ class TaggerData(object):
 
     if raw_sents is not None:
       raw_train_sents, raw_dev_sents = raw_sents
-      self.raw_train_sents = [s[0] for s in raw_train_sents if len(s[0]) <= self.max_train_length]
-      self.raw_dev_sents = [s[0] for s in raw_dev_sents]
+      self.raw_train_sents = [map(str.lower, s) for s in raw_train_sents if len(s[0]) <= self.max_train_length]
+      self.raw_dev_sents = [map(str.lower, s) for s in raw_dev_sents]
       # self.raw_train_sents: list[list[str]]
 
     self.word_dict = word_dict

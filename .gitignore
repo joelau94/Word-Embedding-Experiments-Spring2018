@@ -2,3 +2,5 @@
 0502_biaffine_parser/saves/*
 0425_biaffine_parser/data/*
 0425_biaffine_parser/saves/*
+
+*.pyc

@@ -31,7 +31,7 @@ class MLPLayer(object):
         if self.use_bias:
             self.b = get_variable(_p(prefix, 'b'), [output_dim],
                                 all_zero_initializer())
-        self.params += [self.b]
+            self.params += [self.b]
 
     def connect(self, inputs):
         output = tensor.dot(inputs, self.W)
@@ -41,7 +41,7 @@ class MLPLayer(object):
 
 class EmbeddingLookup(object):
 
-    def __init__(self, vocab_size, embedding_dim, prefix='CharEmbed'):
+    def __init__(self, vocab_size, input_dim, output_dim, prefix='CharEmbed'):
         self.params = []
         self.W = get_variable(_p(prefix, 'W'), [input_dim, output_dim],
                           random_normal_initializer(0.0, 0.01))
@@ -50,7 +50,7 @@ class EmbeddingLookup(object):
         self.params = [self.W, self.b]
 
     def connect(self, index):
-        return self.W_emb[index] + self.b
+        return self.W[index] + self.b
 
 
 class UniGruEncoder(object):
@@ -119,7 +119,7 @@ class BiGruEncoder(object): # TODO: start from here
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
 
-        self.embedder = EmbeddingLookup(self.vocab_size, self.embedding_dim, prefix=prefix+'_embedder')
+        self.embedder = EmbeddingLookup(self.vocab_size, self.embedding_dim, self.hidden_dim, prefix=prefix+'_embedder')
         self.params += self.embedder.params
 
         self.forward_gru = UniGruEncoder(self.embedding_dim, self.hidden_dim, prefix=prefix+'_forward_gru')
