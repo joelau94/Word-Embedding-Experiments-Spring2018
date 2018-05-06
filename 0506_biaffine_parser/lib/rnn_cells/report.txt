@@ -1,0 +1,29 @@
+--------------------------------------------------------------------------------
+Processing file 'rnn_cell.py'
+ outputting to 'rnn_cell.py'
+--------------------------------------------------------------------------------
+
+'rnn_cell.py' Line 42
+--------------------------------------------------------------------------------
+
+Added keyword 'axis' to reordered function 'tf.split'
+Added keyword 'num_or_size_splits' to reordered function 'tf.split'
+Added keyword 'value' to reordered function 'tf.split'
+
+    Old:       inputs1, inputs2 = tf.split(1, 2, inputs)
+                                                         
+    New:       inputs1, inputs2 = tf.split(axis=1, num_or_size_splits=2, value=inputs)
+                                           ~~~~~   ~~~~~~~~~~~~~~~~~~~   ~~~~~~        
+
+'rnn_cell.py' Line 43
+--------------------------------------------------------------------------------
+
+Added keyword 'concat_dim' to reordered function 'tf.concat'
+Added keyword 'values' to reordered function 'tf.concat'
+
+    Old:       inputs = tf.concat(1, [inputs1*inputs2, inputs1, inputs2])
+                                                                          
+    New:       inputs = tf.concat(axis=1, values=[inputs1*inputs2, inputs1, inputs2])
+                                  ~~~~~   ~~~~~~~                                     
+
+
