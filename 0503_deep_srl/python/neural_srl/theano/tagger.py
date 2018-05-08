@@ -296,7 +296,7 @@ class BiLSTMTaggerModel(object):
     """ Return predictions and scores of shape [batch_size, time_steps, label space size].
         Used at test time.
     """
-    inputs_0 = tensor.ltensor3('inputs_0')
+    inputs_0 = tensor.ftensor3('inputs_0')
 
     self.inputs = [None] * (self.num_lstm_layers + 1)
     self.inputs[0] = inputs_0
@@ -323,7 +323,7 @@ class BiLSTMTaggerModel(object):
 
   '''GEMB validation'''
   def get_eval_with_gemb_function(self):
-    inputs_0 = tensor.ltensor3('inputs_0')
+    inputs_0 = tensor.ftensor3('inputs_0')
 
     self.inputs = [None] * (self.num_lstm_layers + 1)
     self.inputs[0] = inputs_0

@@ -212,4 +212,4 @@ def replace_with_gemb(inputs_0, gembedding, oov_pos):
     for i, oov in enumerate(gembedding):
         for j, batch in enumerate(oov):
             inputs_0_new[oov_pos[i],j,:emb_dim] = batch
-    return inputs_0_new
+    return inputs_0_new.astype("float32")
