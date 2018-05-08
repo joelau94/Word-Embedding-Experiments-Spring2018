@@ -662,11 +662,11 @@ class Network(Configurable):
     optimizer = optimizers.RadamOptimizer(self._config, global_step=self.global_step)
     optimizer2 = optimizers.RadamOptimizerMod(self._config, global_step=self.global_step)
 
-    train_graph = self._model.build_graph(self._trainset, reuse=True)
+    train_graph = self._model.build_graph(self._trainset, reuse=False)
 
     train_gemb_graph = self._model.build_graph(self._train_gemb_set, moving_params=optimizer)
     # self._model.add_gemb_loss_graph(train_gemb_graph)
-    self._model.add_char_gemb_loss_graph(train_gemb_graph)
+    self._model.add_char_gemb_loss_graph(train_gemb_graph, reuse=False)
     
     train_op = optimizer.minimize(train_graph['loss'])
     train_gemb_op = optimizer2.minimize(train_gemb_graph['gemb_loss'],
@@ -725,10 +725,10 @@ class Network(Configurable):
     optimizer = optimizers.RadamOptimizer(self._config, global_step=self.global_step)
     optimizer2 = optimizers.RadamOptimizerMod(self._config, global_step=self.global_step)
 
-    train_graph = self._model.build_graph(self._trainset, reuse=True)
+    train_graph = self._model.build_graph(self._trainset, reuse=False)
 
     train_gemb_graph = self._model.build_graph(self._train_gemb_set, moving_params=optimizer)
-    self._model.add_gemb_loss_graph(train_gemb_graph)
+    self._model.add_gemb_loss_graph(train_gemb_graph, reuse=False)
 
     
     train_op = optimizer.minimize(train_graph['loss'])

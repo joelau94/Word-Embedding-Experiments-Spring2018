@@ -16,7 +16,7 @@ class Parser(BaseParser):
   """"""
   
   #=============================================================
-  def build_graph(self, dataset, moving_params=None, reuse=False):
+  def build_graph(self, dataset, moving_params=None, reuse=True):
     graph = {}
     
     vocabs = dataset.vocabs
@@ -93,7 +93,7 @@ class Parser(BaseParser):
 
     return graph
 
-  def add_gemb_loss_graph(self, graph, reuse=False):
+  def add_gemb_loss_graph(self, graph, reuse=True):
     '''
     Build graph used for training GEMB
     recur_states_1: first layer of BiRNN, should pass in graph['recur'][1]
@@ -132,7 +132,7 @@ class Parser(BaseParser):
     graph['gemb_loss'] = tf.reduce_mean(losses)
 
 
-  def add_get_gemb_graph(self, graph, reuse=False):
+  def add_get_gemb_graph(self, graph, reuse=True):
     '''
     Build graph used for generating GEMB
     recur_states_1: first layer of BiRNN, should pass in graph['recur'][1]
@@ -164,7 +164,7 @@ class Parser(BaseParser):
     graph['gembedding'] = tf.reduce_sum(tf.expand_dims(gemb_scores, axis=-1) * embed_mat, axis=-2) # (oov, vocab, emb_dim)
 
 
-  def add_char_gemb_graph(self, graph, reuse=False):
+  def add_char_gemb_graph(self, graph, reuse=True):
     # reuse = tf.AUTO_REUSE
     char_vocab_size = len(self.vocabs[0]._char_idx2str)
     initializer = tf.zeros_initializer()
@@ -210,7 +210,7 @@ class Parser(BaseParser):
     gemb_scores = tf.nn.softmax(feat) 
     graph['gembedding'] = tf.reduce_sum(tf.expand_dims(gemb_scores, axis=-1) * embed_mat, axis=-2) # (oov, vocab, emb_dim)
   
-  def add_char_gemb_loss_graph(self, graph, reuse=False):
+  def add_char_gemb_loss_graph(self, graph, reuse=True):
     # reuse = tf.AUTO_REUSE
     char_vocab_size = len(self.vocabs[0]._char_idx2str)
     initializer = tf.zeros_initializer()
@@ -259,7 +259,7 @@ class Parser(BaseParser):
     losses = tf.nn.softmax_cross_entropy_with_logits(logits=feat, labels=labels)
     graph['gemb_loss'] = tf.reduce_mean(losses)
   
-  def build_test_gemb_graph(self, dataset, moving_params=None, reuse=False):
+  def build_test_gemb_graph(self, dataset, moving_params=None, reuse=True):
     graph = {}
     
     vocabs = dataset.vocabs
