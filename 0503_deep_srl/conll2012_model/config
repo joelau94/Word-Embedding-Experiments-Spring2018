@@ -19,6 +19,6 @@
 	"max_epochs": 500,
 	"checkpoint_every_x_epochs": 1,
 
-	"char_embed_dim": 20,
+	"char_emb_dim": 20,
 	"char_rnn_dim": 50
 }

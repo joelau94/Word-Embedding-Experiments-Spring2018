@@ -3,4 +3,8 @@
 0425_biaffine_parser/data/*
 0425_biaffine_parser/saves/*
 
+0503_deep_srl/conll2012_model/
+0503_deep_srl/data/srl/*
+
 *.pyc
+*.txt

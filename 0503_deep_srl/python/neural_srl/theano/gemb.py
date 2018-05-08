@@ -163,7 +163,7 @@ class BiGruEncoder(object): # TODO: start from here
         fw_final_state = forward_context[-1]
         bw_final_state = backward_context[-1]
         final_states = tensor.concatenate([ fw_final_state, bw_final_state ], axis=-1) # (batch, hidden_dim)
-
+	return final_states
 
 class GembModel(object):
     """docstring for GembModel"""
