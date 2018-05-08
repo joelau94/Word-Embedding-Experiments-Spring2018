@@ -183,7 +183,7 @@ class Parser(BaseParser):
     forward_cell = tf.contrib.rnn.GRUCell(num_units=64, name = "forward_cell")
     backward_cell = tf.contrib.rnn.GRUCell(num_units=64, name = "backward_cell")
     
-    with tf.variable_scope('char_brnn_gemb', reuse=reuse):
+    with tf.variable_scope('char_gemb', reuse=reuse):
       outputs, states  = tf.nn.bidirectional_dynamic_rnn(
         cell_fw=forward_cell,
         cell_bw=backward_cell,
