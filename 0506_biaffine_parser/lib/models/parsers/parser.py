@@ -16,7 +16,7 @@ class Parser(BaseParser):
   """"""
   
   #=============================================================
-  def build_graph(self, dataset, moving_params=None, reuse=True):
+  def build_graph(self, dataset, moving_params=None):
     graph = {}
     
     vocabs = dataset.vocabs
@@ -27,7 +27,7 @@ class Parser(BaseParser):
     self.vocabs = vocabs # train/valid/dev are referring to the same vocabs object
     graph['inputs'] = inputs # input nodes are in different graph: train/valid/test
     
-    # reuse = tf.AUTO_REUSE
+    reuse = tf.AUTO_REUSE
     self.tokens_to_keep3D = tf.expand_dims(tf.to_float(tf.greater(inputs[:,:,0], vocabs[0].ROOT)), 2)
     self.sequence_lengths = tf.reshape(tf.reduce_sum(self.tokens_to_keep3D, [1, 2]), [-1,1])
     self.n_tokens = tf.reduce_sum(self.sequence_lengths)
@@ -93,7 +93,7 @@ class Parser(BaseParser):
 
     return graph
 
-  def add_gemb_loss_graph(self, graph, reuse=True):
+  def add_gemb_loss_graph(self, graph):
     '''
     Build graph used for training GEMB
     recur_states_1: first layer of BiRNN, should pass in graph['recur'][1]
@@ -119,7 +119,7 @@ class Parser(BaseParser):
             num_outputs=len(self.vocabs[0]._str2idx),
             activation_fn=None,
             scope='gemb_fc',
-            reuse=reuse)
+            reuse=tf.AUTO_REUSE)
 
     # for testing
     logits = tf.squeeze(feat)
@@ -132,7 +132,7 @@ class Parser(BaseParser):
     graph['gemb_loss'] = tf.reduce_mean(losses)
 
 
-  def add_get_gemb_graph(self, graph, reuse=True):
+  def add_get_gemb_graph(self, graph):
     '''
     Build graph used for generating GEMB
     recur_states_1: first layer of BiRNN, should pass in graph['recur'][1]
@@ -158,21 +158,17 @@ class Parser(BaseParser):
             num_outputs=len(self.vocabs[0]._str2idx),
             activation_fn=None,
             scope='gemb_fc',
-            reuse=reuse) # (oov, vocab)
+            reuse=True) # (oov, vocab)
 
     gemb_scores = tf.nn.softmax(feat) # (oov, vocab)
     graph['gembedding'] = tf.reduce_sum(tf.expand_dims(gemb_scores, axis=-1) * embed_mat, axis=-2) # (oov, vocab, emb_dim)
 
 
-  def add_char_gemb_graph(self, graph, reuse=True):
-    # reuse = tf.AUTO_REUSE
+  def add_char_gemb_graph(self, graph):
+    reuse = tf.AUTO_REUSE
     char_vocab_size = len(self.vocabs[0]._char_idx2str)
-    initializer = tf.zeros_initializer()
-    embed_size = 100
-    
-    with tf.variable_scope("embedding", reuse=reuse):
-        embedding = tf.get_variable("embedding", shape=(char_vocab_size, embed_size), initializer=initializer)
-    
+    with tf.name_scope('embedding_layer'):
+      embedding = tf.constant(np.eye(char_vocab_size), dtype=tf.float32)
     embed_mat = self.vocabs[0].trainable_embeddings
     vocab_size = embed_mat.get_shape().as_list()[0]
     oov_pos = tf.placeholder(dtype=tf.int32, shape=(None,), name='oov_pos')
@@ -187,7 +183,7 @@ class Parser(BaseParser):
     forward_cell = tf.contrib.rnn.GRUCell(num_units=64, name = "forward_cell")
     backward_cell = tf.contrib.rnn.GRUCell(num_units=64, name = "backward_cell")
     
-    with tf.variable_scope('char_gemb', reuse=reuse):
+    with tf.variable_scope('char_brnn_gemb', reuse=reuse):
       outputs, states  = tf.nn.bidirectional_dynamic_rnn(
         cell_fw=forward_cell,
         cell_bw=backward_cell,
@@ -196,7 +192,7 @@ class Parser(BaseParser):
         inputs=char_input)
     
     forward_state, backward_state = states
-    ctx = tf.concat((forward_state, backward_state), axis=-1)
+    ctx = tf.concat((forward_state[-1], backward_state[-1]), axis=-1)
     # ctx = tf.transpose(ctx, [1,0,2])
     print("CTX", tf.shape(ctx))
     inputs_dimshuffle = tf.transpose(graph['inputs'], [1,0,2])
@@ -210,14 +206,11 @@ class Parser(BaseParser):
     gemb_scores = tf.nn.softmax(feat) 
     graph['gembedding'] = tf.reduce_sum(tf.expand_dims(gemb_scores, axis=-1) * embed_mat, axis=-2) # (oov, vocab, emb_dim)
   
-  def add_char_gemb_loss_graph(self, graph, reuse=True):
-    # reuse = tf.AUTO_REUSE
+  def add_char_gemb_loss_graph(self, graph):
+    reuse = tf.AUTO_REUSE
     char_vocab_size = len(self.vocabs[0]._char_idx2str)
-    initializer = tf.zeros_initializer()
-    embed_size = 100
-    
-    with tf.variable_scope("embedding", reuse=reuse):
-        embedding = tf.get_variable("embedding", shape=(char_vocab_size, embed_size), initializer=initializer)
+    with tf.name_scope('embedding_layer'):
+      embedding = tf.constant(np.eye(char_vocab_size), dtype=tf.float32)
   
     oov_pos = tf.placeholder(dtype=tf.int32, shape=(None,), name='oov_pos')
     oov_char_rep = tf.placeholder(dtype=tf.int32, shape=(None, None, ), name = "oov_char_rep")
@@ -240,7 +233,7 @@ class Parser(BaseParser):
         inputs=char_input)
     
     forward_state, backward_state = states
-    ctx = tf.concat((forward_state, backward_state), axis=-1)
+    ctx = tf.concat((forward_state[-1], backward_state[-1]), axis=-1)
     # ctx = tf.transpose(ctx, [1,0,2])
     print("CTX", tf.shape(ctx))
     inputs_dimshuffle = tf.transpose(graph['inputs'], [1,0,2])
@@ -259,7 +252,7 @@ class Parser(BaseParser):
     losses = tf.nn.softmax_cross_entropy_with_logits(logits=feat, labels=labels)
     graph['gemb_loss'] = tf.reduce_mean(losses)
   
-  def build_test_gemb_graph(self, dataset, moving_params=None, reuse=True):
+  def build_test_gemb_graph(self, dataset, moving_params=None):
     graph = {}
     
     vocabs = dataset.vocabs
@@ -270,7 +263,7 @@ class Parser(BaseParser):
     self.vocabs = vocabs # train/valid/dev are referring to the same vocabs object
     graph['inputs'] = inputs # input nodes are in different graph: train/valid/test
     
-    # reuse = True
+    reuse = True
     self.tokens_to_keep3D = tf.expand_dims(tf.to_float(tf.greater(inputs[:,:,0], vocabs[0].ROOT)), 2)
     self.sequence_lengths = tf.reshape(tf.reduce_sum(self.tokens_to_keep3D, [1, 2]), [-1,1])
     self.n_tokens = tf.reduce_sum(self.sequence_lengths)
@@ -345,4 +338,4 @@ class Parser(BaseParser):
     parse_preds = self.parse_argmax(parse_probs, tokens_to_keep)
     rel_probs = rel_probs[np.arange(len(parse_preds)), parse_preds]
     rel_preds = self.rel_argmax(rel_probs, tokens_to_keep)
-return parse_preds, rel_preds
+    return parse_preds, rel_preds
